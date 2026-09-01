@@ -1,0 +1,207 @@
+/* ------------------------------------------------------------------ */
+/* Shell                                                               */
+/* ------------------------------------------------------------------ */
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* The game fills the viewport under the bar and must never scroll. */
+.app-game {
+  overflow: hidden;
+}
+
+/* ------------------------------------------------------------------ */
+/* Top bar                                                             */
+/* ------------------------------------------------------------------ */
+
+.topbar {
+  flex: 0 0 auto;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+
+.topbar-inner {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  padding: 0.6rem 1rem;
+}
+
+.topbar-brand {
+  background: none;
+  border: none;
+  color: var(--ink);
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0.25rem 0;
+}
+
+.topbar-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  flex: 1 1 auto;
+}
+
+.topbar-link {
+  color: var(--ink-dim);
+  text-decoration: none;
+  font-size: 0.9rem;
+  padding: 0.25rem 0;
+}
+
+.topbar-link:hover {
+  color: var(--ink);
+  text-decoration: underline;
+}
+
+.topbar-toggle {
+  background: var(--accent);
+  color: #0d1b0d;
+  border: none;
+  border-radius: 6px;
+  padding: 0.45rem 0.85rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* ------------------------------------------------------------------ */
+/* Game stage                                                          */
+/* ------------------------------------------------------------------ */
+
+.game-stage {
+  flex: 1 1 auto;
+  min-height: 0;
+  position: relative;
+}
+
+/* Kaplay reads offsetWidth/offsetHeight from this element and resizes its
+   backing store to match, so CSS is the single source of truth for size. */
+.game-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+}
+
+/* ------------------------------------------------------------------ */
+/* Landing screen                                                      */
+/* ------------------------------------------------------------------ */
+
+.landing {
+  min-height: 100%;
+  display: grid;
+  place-items: center;
+  padding: 2rem 1rem;
+}
+
+.landing-card {
+  max-width: 44rem;
+  text-align: center;
+}
+
+.landing-eyebrow {
+  margin: 0 0 0.5rem;
+  color: var(--accent);
+  font-size: 0.85rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.landing-name {
+  margin: 0 0 1rem;
+  font-size: clamp(2rem, 6vw, 3.25rem);
+  line-height: 1.1;
+}
+
+.landing-tagline {
+  margin: 0 auto 2rem;
+  max-width: 38rem;
+  color: var(--ink-dim);
+  font-size: 1.05rem;
+}
+
+.landing-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: center;
+}
+
+.btn {
+  border-radius: 8px;
+  padding: 0.75rem 1.4rem;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: #0d1b0d;
+  border: 2px solid var(--accent);
+}
+
+.btn-secondary {
+  background: transparent;
+  color: var(--ink);
+  border: 2px solid var(--border);
+}
+
+.btn-secondary:hover {
+  border-color: var(--ink-dim);
+}
+
+.landing-hint {
+  margin-top: 1.75rem;
+  color: var(--ink-dim);
+  font-size: 0.85rem;
+}
+
+.landing-hint kbd {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.1rem 0.4rem;
+  font-size: 0.8rem;
+}
+
+/* ------------------------------------------------------------------ */
+/* Classic mode (structural only for now — Phase 5 styles it properly) */
+/* ------------------------------------------------------------------ */
+
+.classic {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  max-width: 52rem;
+  width: 100%;
+  margin: 0 auto;
+  padding: 1.5rem 1rem 4rem;
+}
+
+.classic a {
+  color: var(--accent);
+}
+
+.classic section {
+  margin-top: 2.5rem;
+  /* Anchor links from the sticky-ish top bar shouldn't hide the heading. */
+  scroll-margin-top: 4rem;
+}
+
+.classic dt {
+  font-weight: 700;
+}
+
+.classic dd {
+  margin: 0 0 0.5rem;
+}

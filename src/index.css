@@ -1,0 +1,35 @@
+:root {
+  --bg: #10171f;
+  --panel: #17212c;
+  --ink: #eef3f7;
+  --ink-dim: #a9bccb;
+  --accent: #6fbf5e;
+  --border: #2b3946;
+
+  color-scheme: dark;
+  font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  line-height: 1.5;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+}
+
+/* Visible focus everywhere — required for the keyboard-only path. */
+:where(a, button, [tabindex]):focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
