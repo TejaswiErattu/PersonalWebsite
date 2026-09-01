@@ -114,3 +114,39 @@ export function findSpawnPoint(): { x: number; y: number } {
   }
   throw new Error(`No '${SPAWN_SYMBOL}' spawn tile found in the village map.`)
 }
+
+/** A block of tiles, in tile coordinates. */
+export interface TileRect {
+  col: number
+  row: number
+  cols: number
+  rows: number
+}
+
+/**
+ * The bounding box of every tile using `symbol`, or null if the map has none.
+ *
+ * Building footprints are drawn as solid blocks of one letter, so the bounding
+ * box is the building. Deriving it from the map means moving or resizing a
+ * building is an edit to the ASCII art and nothing else — the sprite, the
+ * collision and the door trigger all follow automatically.
+ */
+export function findTileRect(symbol: string): TileRect | null {
+  let minCol = Infinity
+  let minRow = Infinity
+  let maxCol = -1
+  let maxRow = -1
+
+  for (let row = 0; row < MAP.length; row++) {
+    for (let col = 0; col < MAP[row].length; col++) {
+      if (MAP[row][col] !== symbol) continue
+      if (col < minCol) minCol = col
+      if (col > maxCol) maxCol = col
+      if (row < minRow) minRow = row
+      if (row > maxRow) maxRow = row
+    }
+  }
+
+  if (maxCol === -1) return null
+  return { col: minCol, row: minRow, cols: maxCol - minCol + 1, rows: maxRow - minRow + 1 }
+}

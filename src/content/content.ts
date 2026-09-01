@@ -29,7 +29,8 @@ export interface Person {
   linkedin: string
   github: string
   website: string
-  resumeUrl: string
+  /** Role-specific resumes, offered separately rather than as one combined PDF. */
+  resumes: ContentLink[]
   /** Spoken languages, with fluency, exactly as listed on the resume. */
   spokenLanguages: string[]
 }
@@ -100,7 +101,7 @@ export interface Contact {
   phone: string
   linkedin: string
   github: string
-  resumeUrl: string
+  resumes: ContentLink[]
   location: string
   blurb: string
   rolesSeeking: string[]
@@ -128,8 +129,16 @@ const PHONE = '(425) 800-4330'
 const LINKEDIN = 'https://www.linkedin.com/in/tejaswi-erattu-3b9b04246/'
 const GITHUB = 'https://github.com/TejaswiErattu'
 const WEBSITE = 'https://tejaswierattuwebsite.vercel.app/'
-const RESUME = '/resume.pdf'
 const LOCATION = 'Seattle, Washington'
+
+/**
+ * Two role-specific resumes rather than one combined document, so a reader can
+ * pick the track they are hiring for. Both live in `public/`.
+ */
+const RESUMES: ContentLink[] = [
+  { label: 'Software resume', href: '/resume-software.pdf' },
+  { label: 'Security resume', href: '/resume-security.pdf' },
+]
 
 /* ------------------------------------------------------------------ */
 /* Content                                                             */
@@ -147,7 +156,7 @@ export const content: PortfolioContent = {
     linkedin: LINKEDIN,
     github: GITHUB,
     website: WEBSITE,
-    resumeUrl: RESUME,
+    resumes: RESUMES,
     spokenLanguages: ['English (Fluent)', 'Malayalam (Native)', 'Spanish (Elementary)'],
   },
 
@@ -568,10 +577,10 @@ export const content: PortfolioContent = {
     phone: PHONE,
     linkedin: LINKEDIN,
     github: GITHUB,
-    resumeUrl: RESUME,
+    resumes: RESUMES,
     location: LOCATION,
     blurb:
-      "I'm looking for software engineering and security internships where I solve complex problems and ship impactful products.",
+      "I'm looking for 2027 software engineering and security internships where I solve complex problems and ship impactful products.",
     rolesSeeking: [
       'Software engineering',
       'Security engineering',
@@ -579,7 +588,7 @@ export const content: PortfolioContent = {
       'Full-stack development',
       'Machine learning',
     ],
-    availability: 'Onsite, hybrid, or remote',
+    availability: 'Available for 2027 internships — onsite, hybrid, or remote',
   },
 }
 

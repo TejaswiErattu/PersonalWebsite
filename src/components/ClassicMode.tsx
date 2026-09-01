@@ -169,12 +169,14 @@ export default function ClassicMode() {
               {contact.github}
             </a>
           </li>
-          <li>
-            Resume:{' '}
-            <a href={contact.resumeUrl} target="_blank" rel="noopener noreferrer">
-              Download PDF
-            </a>
-          </li>
+          {contact.resumes.map((resume) => (
+            <li key={resume.href}>
+              {resume.label}:{' '}
+              <a href={resume.href} target="_blank" rel="noopener noreferrer">
+                Download PDF
+              </a>
+            </li>
+          ))}
           <li>Location: {contact.location}</li>
         </ul>
         <p>

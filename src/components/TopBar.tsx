@@ -32,16 +32,18 @@ export default function TopBar({ mode, onToggleMode, onGoHome }: TopBarProps) {
               </a>
             </li>
           ))}
-          <li>
-            <a
-              className="topbar-link"
-              href={content.person.resumeUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Resume
-            </a>
-          </li>
+          {content.person.resumes.map((resume) => (
+            <li key={resume.href}>
+              <a
+                className="topbar-link"
+                href={resume.href}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {resume.label}
+              </a>
+            </li>
+          ))}
         </ul>
 
         <button type="button" className="topbar-toggle" onClick={onToggleMode}>
