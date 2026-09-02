@@ -2,7 +2,8 @@ import kaplay, { type KAPLAYCtx, type GameObj } from 'kaplay'
 
 import { canStandAt } from './collision'
 import { InteractionRegistry } from './interactions'
-import { BUILDING_SYMBOLS, LOCATIONS, type Dialogue } from './locations'
+import { BUILDING_SYMBOLS, LOCATIONS, SIGNPOSTS, assertStationSpacing, type Dialogue } from './locations'
+import { buildScenery, loadScenerySprites } from './scenery'
 import {
   GRASS_COLOR,
   MAP,
@@ -23,17 +24,47 @@ import {
   walkAnim,
   type Direction,
 } from './sprites'
-import { createBuildingSprite, createCueSprite } from './worldSprites'
+import { createBuildingSprite, createCueSprite, createSecurityCenterSprite } from './worldSprites'
 
 /** Player walking speed, in world pixels per second. */
 const PLAYER_SPEED = 78
 
-/** How much the world is magnified. Tiles are 16px, so 2x reads as pixel art
- *  while still showing roughly two thirds of the village at once. */
-const CAMERA_ZOOM = 2
+/**
+ * How much the world is magnified.
+ *
+ * On a desktop window 2x reads as pixel art while still showing roughly two
+ * thirds of the village. On a 375px-wide phone that same 2x would show only
+ * ~11 tiles across, which is too claustrophobic to navigate — so zoom is
+ * resolved from the canvas width every frame instead of being fixed. Picking
+ * it per frame (rather than once at boot) means rotating the device or
+ * resizing the window is handled for free.
+ */
+const CAMERA_ZOOM_DESKTOP = 2
+const CAMERA_ZOOM_COMPACT = 1.5
+/** Below this canvas width, drop to the compact zoom. */
+const COMPACT_WIDTH = 560
+
+function zoomForWidth(width: number): number {
+  return width < COMPACT_WIDTH ? CAMERA_ZOOM_COMPACT : CAMERA_ZOOM_DESKTOP
+}
 
 /** Higher = camera snaps to the player faster. Frame-rate independent. */
 const CAMERA_FOLLOW = 12
+
+/**
+ * Camera follow used when the visitor has asked for reduced motion. A much
+ * higher constant means the camera effectively sticks to the player instead
+ * of gliding after them, which removes the drifting parallax that triggers
+ * motion sensitivity — without pinning the view somewhere unhelpful.
+ */
+const CAMERA_FOLLOW_REDUCED = 60
+
+/** True when the OS/browser asks for reduced motion. Re-read per boot. */
+function prefersReducedMotion(): boolean {
+  return (
+    typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
+  )
+}
 
 /** Draw order: tiles at 0, buildings above them, player above those. */
 const BUILDING_Z = 1
@@ -47,6 +78,22 @@ const CUE_Z = 20
  * far enough that you don't have to hunt for the exact pixel.
  */
 const INTERACT_RADIUS = 26
+
+/**
+ * Same idea as `INTERACT_RADIUS`, but tighter: multi-station buildings pack
+ * several triggers along one wall, and a smaller radius keeps the player
+ * standing in front of the one they mean instead of anything within a tile
+ * or two of the whole row. `nearest()` would resolve overlap correctly
+ * either way — this is about feel, not correctness.
+ */
+const STATION_INTERACT_RADIUS = 20
+
+/**
+ * Signposts are a single tile with one line of text — smaller than either
+ * building radius, since there is no "door" to stand in front of, just a
+ * post to walk up to.
+ */
+const SIGNPOST_INTERACT_RADIUS = 16
 
 /** Gap between the door and the floating cue above it. */
 const CUE_LIFT = 30
@@ -81,6 +128,15 @@ export interface GameHandle {
   destroy: () => void
   /** Hands control back to the player after a dialogue closes. */
   resume: () => void
+  /**
+   * Sets a movement direction from outside the keyboard — the on-screen
+   * D-pad. Components pass a direction vector (it gets normalised here), and
+   * (0, 0) to stop. It is summed with keyboard input rather than replacing
+   * it, so a device with both a touchscreen and a keyboard works either way.
+   */
+  setTouchMove: (x: number, y: number) => void
+  /** Fires the interact action, as if the player had pressed E. */
+  triggerInteract: () => void
 }
 
 /**
@@ -92,6 +148,15 @@ export interface GameCallbacks {
   onPromptChange: (label: string | null) => void
   /** Player pressed the interact key on something with dialogue. */
   onOpenDialogue: (dialogue: Dialogue) => void
+  /**
+   * Real asset-loading progress, 0..1, forwarded straight from Kaplay's own
+   * loader. Fires every frame while assets are outstanding. This is a count
+   * of assets actually resolved — not a timer — so it is allowed to jump
+   * straight to 1 when there is little to do.
+   */
+  onLoadProgress: (progress: number) => void
+  /** Assets are decoded and the first frame is about to render. */
+  onReady: () => void
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -155,18 +220,65 @@ function buildBuildings(
       'building',
     ])
 
-    // The door is drawn centred on the building's bottom edge, so the trigger
-    // anchors to that same point — the spot the player walks up to.
+    // Single-door buildings: the door is drawn centred on the bottom edge,
+    // so the trigger anchors to that same point — the spot the player walks
+    // up to.
     const { dialogue } = location
-    if (!dialogue) continue
+    if (dialogue) {
+      registry.register({
+        id: location.symbol,
+        label: location.name,
+        x: left + width / 2,
+        y: top + height,
+        radius: INTERACT_RADIUS,
+        onInteract: () => openDialogue(dialogue()),
+      })
+    }
+
+    // Multi-station buildings: one trigger per station, evenly spaced along
+    // the bottom edge. Overlapping radii are fine — `registry.nearest()`
+    // still guarantees only the closest one ever fires.
+    if (location.stations) {
+      const count = location.stations.length
+      location.stations.forEach((station, index) => {
+        registry.register({
+          id: `${location.symbol}:${station.id}`,
+          label: station.label,
+          x: left + ((index + 1) * width) / (count + 1),
+          y: top + height,
+          radius: STATION_INTERACT_RADIUS,
+          onInteract: () => openDialogue(station.dialogue()),
+        })
+      })
+    }
+  }
+}
+
+/**
+ * Registers one interactable per signpost. Signposts have no sprite of
+ * their own — `buildLevel()` already draws them as a plain colored tile,
+ * same as water or a tree — so this only needs to add the trigger.
+ */
+function buildSignposts(
+  registry: InteractionRegistry,
+  openDialogue: (dialogue: Dialogue) => void,
+): void {
+  for (const signpost of SIGNPOSTS) {
+    const rect = findTileRect(signpost.symbol)
+    if (!rect) continue
 
     registry.register({
-      id: location.symbol,
-      label: location.name,
-      x: left + width / 2,
-      y: top + height,
-      radius: INTERACT_RADIUS,
-      onInteract: () => openDialogue(dialogue()),
+      id: `signpost:${signpost.symbol}`,
+      label: 'Signpost',
+      x: rect.col * TILE_SIZE + TILE_SIZE / 2,
+      y: rect.row * TILE_SIZE + TILE_SIZE / 2,
+      radius: SIGNPOST_INTERACT_RADIUS,
+      onInteract: () =>
+        openDialogue({
+          id: `signpost-${signpost.symbol}`,
+          title: 'Signpost',
+          lines: [signpost.text],
+        }),
     })
   }
 }
@@ -214,6 +326,7 @@ function buildPlayer(k: KAPLAYCtx): GameObj {
  */
 export function createGame(canvas: HTMLCanvasElement, callbacks: GameCallbacks): GameHandle {
   assertMapIsRectangular()
+  assertStationSpacing()
 
   const k = kaplay({
     canvas,
@@ -227,6 +340,20 @@ export function createGame(canvas: HTMLCanvasElement, callbacks: GameCallbacks):
   })
 
   const registry = new InteractionRegistry()
+
+  /** Resolved once per boot; the media query does not change mid-session in
+   *  any way worth tearing the game down for. */
+  const reducedMotion = prefersReducedMotion()
+  const cameraFollow = reducedMotion ? CAMERA_FOLLOW_REDUCED : CAMERA_FOLLOW
+
+  /** Live direction from the on-screen D-pad. Written by `setTouchMove`. */
+  const touchMove = { x: 0, y: 0 }
+
+  /**
+   * Assigned once assets finish loading. Until then the interact button has
+   * nothing to call, which is correct — there is no world to interact with.
+   */
+  let interactFn: (() => void) | null = null
 
   /**
    * While a dialogue is open the world freezes: no walking, no cue, no second
@@ -266,22 +393,34 @@ export function createGame(canvas: HTMLCanvasElement, callbacks: GameCallbacks):
 
   k.loadSprite('cue', createCueSprite())
 
+  loadScenerySprites(k)
+
+  // Kaplay fires this every frame while any asset is still outstanding, with
+  // the real resolved/total ratio. Forwarding it verbatim is what makes the
+  // loading bar honest — nothing here is interpolated or timed.
+  k.onLoading((progress) => callbacks.onLoadProgress(progress))
+
   // Every building gets its own sprite, drawn to its exact footprint. Loaded
   // here rather than inside `onLoad` so they are decoded before anything is
   // added to the scene.
   for (const location of LOCATIONS) {
     const rect = findTileRect(location.symbol)
     if (!rect) continue
-    k.loadSprite(
-      buildingSpriteName(location.symbol),
-      createBuildingSprite(rect.cols * TILE_SIZE, rect.rows * TILE_SIZE, location.palette),
-    )
+    const width = rect.cols * TILE_SIZE
+    const height = rect.rows * TILE_SIZE
+    const sprite =
+      location.variant === 'security'
+        ? createSecurityCenterSprite(width, height, location.palette)
+        : createBuildingSprite(width, height, location.palette)
+    k.loadSprite(buildingSpriteName(location.symbol), sprite)
   }
 
   // Wait for the sprites to finish decoding before playing animations on them.
   k.onLoad(() => {
     buildLevel(k)
     buildBuildings(k, registry, openDialogue)
+    buildSignposts(registry, openDialogue)
+    const scenery = buildScenery(k, { reducedMotion })
     const player = buildPlayer(k)
 
     const cue = k.add([
@@ -303,12 +442,18 @@ export function createGame(canvas: HTMLCanvasElement, callbacks: GameCallbacks):
       target.onInteract()
     }
 
+    // Published so the on-screen interact button can fire the exact same
+    // path as the keyboard, rather than synthesising a fake key event.
+    interactFn = interact
+
     INTERACT_KEYS.forEach((key) => k.onKeyPress(key, interact))
 
     let facing: Direction = 'down'
     let playingAnim: string | null = null
     const camera = k.vec2(player.pos.x, player.pos.y)
-    k.setCamScale(CAMERA_ZOOM)
+    // Seed the camera before the first frame so nothing pops; the update loop
+    // re-resolves the zoom every frame from there.
+    k.setCamScale(zoomForWidth(canvas.clientWidth))
     k.setCamPos(camera)
 
     const stopWalking = (): void => {
@@ -330,6 +475,12 @@ export function createGame(canvas: HTMLCanvasElement, callbacks: GameCallbacks):
         if (KEY_BINDINGS.right.some((key) => k.isKeyDown(key))) move.x += 1
         if (KEY_BINDINGS.up.some((key) => k.isKeyDown(key))) move.y -= 1
         if (KEY_BINDINGS.down.some((key) => k.isKeyDown(key))) move.y += 1
+
+        // The D-pad is summed in rather than checked as an either/or, so a
+        // tablet with a keyboard attached responds to both without one input
+        // source cancelling the other out.
+        move.x += touchMove.x
+        move.y += touchMove.y
 
         if (move.x !== 0 || move.y !== 0) {
           // Normalise so diagonals aren't ~41% faster than orthogonals.
@@ -357,34 +508,63 @@ export function createGame(canvas: HTMLCanvasElement, callbacks: GameCallbacks):
         if (target) {
           cue.opacity = 1
           cue.pos.x = target.x
-          cue.pos.y =
-            target.y - CUE_LIFT + Math.sin(k.time() * CUE_BOB_SPEED) * CUE_BOB_HEIGHT
+          // The bob is the one piece of decorative motion in the world, so it
+          // is the one thing dropped outright under reduced motion — the cue
+          // still appears, it just sits still.
+          const bob = reducedMotion ? 0 : Math.sin(k.time() * CUE_BOB_SPEED) * CUE_BOB_HEIGHT
+          cue.pos.y = target.y - CUE_LIFT + bob
         } else {
           cue.opacity = 0
         }
         setPrompt(target ? target.label : null)
+
+        // Ambient life shares the player's freeze: a chicken strolling past a
+        // paused world would give away that the pause is only skin deep.
+        scenery.update(Math.min(k.dt(), MAX_FRAME_DELTA), k.time())
       }
 
       // --- camera ------------------------------------------------------
       // Exponential smoothing: same feel at 30fps and 144fps, and it never
-      // overshoots, so there is no jitter when the player stops.
-      const t = 1 - Math.exp(-CAMERA_FOLLOW * k.dt())
+      // overshoots, so there is no jitter when the player stops. Under
+      // reduced motion the constant is high enough that the camera is
+      // effectively locked to the player instead of easing after them.
+      const t = 1 - Math.exp(-cameraFollow * k.dt())
       camera.x += (player.pos.x - camera.x) * t
       camera.y += (player.pos.y - camera.y) * t
 
+      // Zoom is resolved per frame from the live canvas width, which makes
+      // rotating a phone or dragging a window edge Just Work. `clientWidth`
+      // is read rather than `k.width()` because it is unambiguously CSS
+      // pixels — the number the breakpoint is expressed in — whereas the
+      // engine's own width can track the backing store instead.
+      const zoom = zoomForWidth(canvas.clientWidth)
+      k.setCamScale(zoom)
+
       // Keep the view inside the map so the void never shows.
-      const halfWidth = k.width() / (2 * CAMERA_ZOOM)
-      const halfHeight = k.height() / (2 * CAMERA_ZOOM)
+      const halfWidth = k.width() / (2 * zoom)
+      const halfHeight = k.height() / (2 * zoom)
       k.setCamPos(
         clamp(camera.x, halfWidth, WORLD_WIDTH - halfWidth),
         clamp(camera.y, halfHeight, WORLD_HEIGHT - halfHeight),
       )
     })
+
+    // Everything is decoded, placed and positioned, and the camera is seeded.
+    // Announcing readiness here rather than at the top of `onLoad` means the
+    // loading screen never lifts on a half-built frame.
+    callbacks.onReady()
   })
 
   return {
     resume: () => {
       paused = false
+    },
+    setTouchMove: (x: number, y: number) => {
+      touchMove.x = x
+      touchMove.y = y
+    },
+    triggerInteract: () => {
+      interactFn?.()
     },
     destroy: () => {
       k.quit()

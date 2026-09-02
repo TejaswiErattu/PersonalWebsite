@@ -1,8 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
+import { blip } from '../audio/audio'
 import { createGame, type GameHandle } from '../game/createGame'
-import type { Dialogue } from '../game/locations'
+import { experienceDialogue, type Dialogue } from '../game/locations'
+import useIsTouchDevice from '../hooks/useIsTouchDevice'
+import ControlsHint from './ControlsHint'
 import DialogueBox from './DialogueBox'
+import LoadingScreen from './LoadingScreen'
+import TouchControls from './TouchControls'
 
 /**
  * Hosts the Kaplay canvas and the UI layered on top of it.
@@ -27,9 +32,13 @@ export default function GameCanvas() {
   const containerRef = useRef<HTMLDivElement>(null)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const handleRef = useRef<GameHandle | null>(null)
+  const isTouch = useIsTouchDevice()
 
   const [prompt, setPrompt] = useState<string | null>(null)
   const [dialogue, setDialogue] = useState<Dialogue | null>(null)
+  /** Real 0..1 from Kaplay's asset loader; 1 once every sprite is decoded. */
+  const [loadProgress, setLoadProgress] = useState(0)
+  const [ready, setReady] = useState(false)
 
   useEffect(() => {
     const container = containerRef.current
@@ -52,7 +61,12 @@ export default function GameCanvas() {
 
     handleRef.current = createGame(canvas, {
       onPromptChange: setPrompt,
-      onOpenDialogue: setDialogue,
+      onOpenDialogue: (next) => {
+        blip('open')
+        setDialogue(next)
+      },
+      onLoadProgress: setLoadProgress,
+      onReady: () => setReady(true),
     })
 
     return () => {
@@ -63,24 +77,81 @@ export default function GameCanvas() {
     }
   }, [])
 
-  /** Closes the box, unfreezes the world, and hands keyboard focus back. */
+  /**
+   * Closes the box and unfreezes the world.
+   *
+   * Focus is deliberately NOT moved here: `DialogueBox`'s focus trap restores
+   * it to whatever opened the dialogue (the canvas for a keyboard player, the
+   * on-screen E button for a touch player), which is the correct target in
+   * both cases and would be clobbered by a blanket `canvas.focus()`.
+   */
   const closeDialogue = useCallback(() => {
+    blip('close')
     setDialogue(null)
     handleRef.current?.resume()
-    canvasRef.current?.focus()
+  }, [])
+
+  /**
+   * A station's card can point at another building's content instead of
+   * repeating it — this is the mechanism that follows that pointer. The
+   * world stays paused; the box below is keyed by `dialogue.id`, so swapping
+   * to a new dialogue here starts it back at line one.
+   */
+  const crossLinkToExperience = useCallback((experienceId: string) => {
+    const next = experienceDialogue(experienceId)
+    if (next) {
+      blip('open')
+      setDialogue(next)
+    }
+  }, [])
+
+  const handleTouchMove = useCallback((x: number, y: number) => {
+    handleRef.current?.setTouchMove(x, y)
+  }, [])
+
+  const handleTouchInteract = useCallback(() => {
+    handleRef.current?.triggerInteract()
   }, [])
 
   return (
     <div className="game-stage">
       <div className="game-viewport" ref={containerRef} />
 
-      {prompt && !dialogue && (
+      {/* Covers the canvas until the world is built. The canvas is left
+          mounted underneath rather than withheld, because Kaplay needs a real
+          element in the document to boot against. */}
+      {!ready && <LoadingScreen progress={loadProgress} label="Decoding sprites" />}
+
+      {ready && prompt && !dialogue && (
         <p className="game-prompt">
-          Press <kbd>E</kbd> to enter the {prompt}
+          {isTouch ? (
+            <>
+              Tap <kbd>E</kbd> to enter the {prompt}
+            </>
+          ) : (
+            <>
+              Press <kbd>E</kbd> to enter the {prompt}
+            </>
+          )}
         </p>
       )}
 
-      {dialogue && <DialogueBox dialogue={dialogue} onClose={closeDialogue} />}
+      {ready && !dialogue && <ControlsHint isTouch={isTouch} />}
+
+      {/* Touch-only, and hidden while a dialogue is up so the pad can't be
+          jabbed at a frozen world behind the overlay. */}
+      {ready && isTouch && !dialogue && (
+        <TouchControls onMove={handleTouchMove} onInteract={handleTouchInteract} />
+      )}
+
+      {dialogue && (
+        <DialogueBox
+          key={dialogue.id}
+          dialogue={dialogue}
+          onClose={closeDialogue}
+          onCrossLink={crossLinkToExperience}
+        />
+      )}
     </div>
   )
 }

@@ -6,8 +6,15 @@
   --accent: #6fbf5e;
   --border: #2b3946;
 
+  /* Two fonts, two jobs. Body copy is the system UI stack because it stays
+     legible at 14-16px on a phone; the pixel font is reserved for headings
+     and short chrome labels, where its low x-height is a style rather than a
+     readability tax. Nothing long is ever set in the pixel font. */
+  --font-body: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-pixel: 'Press Start 2P', ui-monospace, 'Courier New', monospace;
+
   color-scheme: dark;
-  font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-family: var(--font-body);
   line-height: 1.5;
 }
 
@@ -25,6 +32,18 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--ink);
+}
+
+/* Headings carry the pixel font. It is much wider per character than a normal
+   face, so every size steps down and letter-spacing is pulled back in to stop
+   headings from wrapping awkwardly on a narrow phone. `line-height` is raised
+   because the glyphs sit tall in their box. */
+:where(h1, h2, h3, h4, h5, h6) {
+  font-family: var(--font-pixel);
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
 }
 
 /* Visible focus everywhere — required for the keyboard-only path. */
@@ -46,4 +65,18 @@ body {
   clip-path: inset(50%);
   white-space: nowrap;
   border: 0;
+}
+
+/* Global reduced-motion honouring. The game's camera easing and cue bob are
+   handled separately inside the render loop, because they are canvas
+   animations that CSS cannot reach. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

@@ -6,11 +6,49 @@
   display: flex;
   flex-direction: column;
   height: 100%;
+  /* Dynamic viewport height: on iOS/Android the URL bar collapses as you
+     scroll, and `100vh` would leave the game clipped behind it. `dvh` tracks
+     the real visible area. Declared second so browsers without it keep the
+     100% above. */
+  height: 100dvh;
 }
 
 /* The game fills the viewport under the bar and must never scroll. */
 .app-game {
   overflow: hidden;
+  /* Stops the whole page rubber-banding when a thumb drags on the D-pad. */
+  overscroll-behavior: none;
+}
+
+/* Keyboard users land here first and can jump straight past the nav. Visible
+   only while focused, which is the whole point — it must not be a permanent
+   piece of visual furniture. */
+.skip-link {
+  position: absolute;
+  left: 0.5rem;
+  top: -4rem;
+  z-index: 100;
+  background: var(--accent);
+  color: #0d1b0d;
+  font-weight: 700;
+  padding: 0.6rem 1rem;
+  border-radius: 6px;
+  text-decoration: none;
+  transition: top 0.15s ease;
+}
+
+.skip-link:focus {
+  top: 0.5rem;
+}
+
+/* Wrapper introduced so the skip link has something to target. It must pass
+   the shell's flex sizing straight through to the game stage or classic
+   column, hence the matching flex/min-height rather than a plain block. */
+.app-content {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 /* ------------------------------------------------------------------ */
@@ -35,20 +73,55 @@
   background: none;
   border: none;
   color: var(--ink);
-  font-size: 0.95rem;
-  font-weight: 700;
+  font-family: var(--font-pixel);
+  font-size: 0.7rem;
   cursor: pointer;
   padding: 0.25rem 0;
+  flex: 0 0 auto;
 }
 
 .topbar-links {
   display: flex;
-  flex-wrap: wrap;
   gap: 0.25rem 1rem;
   list-style: none;
   margin: 0;
   padding: 0;
   flex: 1 1 auto;
+  /* Without this a flex item refuses to shrink below its content width, so
+     the link strip would shove the audio and view-toggle buttons off the
+     right edge instead of scrolling within itself. */
+  min-width: 0;
+  /* One row that scrolls sideways, rather than wrapping to three rows and
+     eating the game area on a phone. Focus moves still scroll a link into
+     view, so keyboard navigation is unaffected. */
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+  /* --fade-left/--fade-right are set from TopBar.tsx (0px, or FADE_WIDTH
+     when the strip can still scroll that way) so a narrow viewport — where
+     this scrollbar is hidden — gets a visible hint that links continue
+     off-screen instead of the row looking simply cut off. Falls back to no
+     mask (both 0px) before the effect runs on the very first paint. */
+  --fade-left: 0px;
+  --fade-right: 0px;
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent,
+    black var(--fade-left),
+    black calc(100% - var(--fade-right)),
+    transparent
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent,
+    black var(--fade-left),
+    black calc(100% - var(--fade-right)),
+    transparent
+  );
+}
+
+.topbar-links::-webkit-scrollbar {
+  display: none;
 }
 
 .topbar-link {
@@ -56,11 +129,31 @@
   text-decoration: none;
   font-size: 0.9rem;
   padding: 0.25rem 0;
+  white-space: nowrap;
 }
 
 .topbar-link:hover {
   color: var(--ink);
   text-decoration: underline;
+}
+
+/* The credits control is a <button> because it opens a dialog rather than
+   navigating, but it sits in a row of links and must read as one. Without
+   this reset it keeps the user-agent button background, which drops the
+   label to a 2.72:1 contrast ratio against --ink-dim and fails WCAG 1.4.3. */
+.topbar-credits {
+  background: none;
+  border: 0;
+  font: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 0 0 auto;
 }
 
 .topbar-toggle {
@@ -71,6 +164,42 @@
   padding: 0.45rem 0.85rem;
   font-size: 0.85rem;
   font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------------------------ */
+/* Audio control                                                       */
+/* ------------------------------------------------------------------ */
+
+.audio-control {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.audio-toggle {
+  background: none;
+  border: 2px solid var(--border);
+  border-radius: 6px;
+  color: var(--ink);
+  /* 44px is the minimum comfortable touch target; the emoji glyph alone
+     would be about half that. */
+  min-width: 44px;
+  min-height: 44px;
+  font-size: 1rem;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+
+.audio-toggle:hover {
+  border-color: var(--accent);
+}
+
+.audio-volume input {
+  width: 5.5rem;
+  accent-color: var(--accent);
   cursor: pointer;
 }
 
@@ -98,6 +227,95 @@
   width: 100%;
   height: 100%;
   image-rendering: pixelated;
+}
+
+/* ------------------------------------------------------------------ */
+/* Loading screen                                                      */
+/* ------------------------------------------------------------------ */
+
+/* Sits over the canvas rather than replacing it: Kaplay boots against a real
+   element in the document, so the canvas has to exist underneath. */
+.loading {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  background: #10171f;
+  padding: 1rem;
+}
+
+.loading-inner {
+  width: min(28rem, 100%);
+  text-align: center;
+}
+
+.loading-title {
+  margin: 0 0 1.25rem;
+  font-family: var(--font-pixel);
+  font-size: 0.75rem;
+  line-height: 1.6;
+  color: var(--accent);
+}
+
+/* Chunky segmented bar rather than a smooth fill, to match the 16px world. */
+.loading-bar {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border: 2px solid var(--border);
+  border-radius: 3px;
+  background: #0a0f14;
+}
+
+.loading-seg {
+  flex: 1 1 0;
+  height: 0.85rem;
+  background: #1b2733;
+}
+
+.loading-seg.is-on {
+  background: var(--accent);
+}
+
+/* Indeterminate: the chunk download reports no byte progress, so the bar
+   shows activity without claiming a percentage. */
+.loading-bar.is-indeterminate {
+  position: relative;
+  overflow: hidden;
+}
+
+.loading-bar.is-indeterminate::after {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  width: 30%;
+  background: var(--accent);
+  opacity: 0.75;
+  animation: loading-sweep 1.1s linear infinite;
+}
+
+@keyframes loading-sweep {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(360%);
+  }
+}
+
+.loading-label {
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+  margin: 0.9rem 0 0;
+  font-size: 0.85rem;
+  color: var(--ink-dim);
+}
+
+.loading-percent {
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
 }
 
 /* ------------------------------------------------------------------ */
@@ -159,8 +377,10 @@
 
 .dialogue-title {
   margin: 0;
-  font-size: 1rem;
-  letter-spacing: 0.04em;
+  /* Pixel font: roughly twice the width per character of the body face, so
+     the nominal size drops to keep long station titles on one or two lines. */
+  font-size: 0.75rem;
+  letter-spacing: 0;
   text-transform: uppercase;
   color: var(--accent);
 }
@@ -227,6 +447,69 @@
   border-color: var(--accent);
 }
 
+/* The screen shown after a dialogue's lines finish, in place of the
+   typewriter text. Same frame, different content: chips for stack/skills,
+   real link buttons, and — where a station points at another building's
+   content instead of repeating it — a cross-link button. */
+.dialogue-card {
+  min-height: 4.5em;
+  margin: 0 0 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.dialogue-card-tech {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dialogue-card-tech li {
+  border: 2px solid var(--border);
+  padding: 0.15rem 0.55rem;
+  font-size: 0.75rem;
+  color: var(--ink-dim);
+}
+
+.dialogue-card-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.dialogue-card-link {
+  border: 2px solid var(--accent);
+  color: var(--accent);
+  text-decoration: none;
+  font-size: 0.8rem;
+  padding: 0.3rem 0.7rem;
+}
+
+.dialogue-card-link:hover {
+  background: var(--accent);
+  color: var(--panel);
+}
+
+.dialogue-card-crosslink {
+  align-self: flex-start;
+  background: none;
+  border: 2px dashed var(--border);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.8rem;
+  padding: 0.4rem 0.7rem;
+  cursor: pointer;
+}
+
+.dialogue-card-crosslink:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .dialogue-caret {
     animation: none;
@@ -259,8 +542,10 @@
 
 .landing-name {
   margin: 0 0 1rem;
-  font-size: clamp(2rem, 6vw, 3.25rem);
-  line-height: 1.1;
+  /* Scaled well below the old 2-3.25rem because the pixel font is far wider;
+     this lands at a similar rendered width. */
+  font-size: clamp(1rem, 4.5vw, 1.9rem);
+  line-height: 1.4;
 }
 
 .landing-tagline {
@@ -316,7 +601,7 @@
 }
 
 /* ------------------------------------------------------------------ */
-/* Classic mode (structural only for now — Phase 5 styles it properly) */
+/* Classic mode                                                        */
 /* ------------------------------------------------------------------ */
 
 .classic {
@@ -328,8 +613,33 @@
   padding: 1.5rem 1rem 4rem;
 }
 
-.classic a {
+.classic a:not(.btn) {
   color: var(--accent);
+}
+
+/* Classic mode heading scale. Sized for the pixel font — each step is roughly
+   half what the same level would be in a normal face, so the rendered width
+   matches and long headings still wrap sensibly on a phone. */
+.classic h1 {
+  font-size: clamp(1rem, 4.5vw, 1.6rem);
+  margin-bottom: 0.5rem;
+}
+
+.classic h2 {
+  font-size: 1rem;
+  color: var(--accent);
+  margin-bottom: 0.75rem;
+}
+
+.classic h3 {
+  font-size: 0.8rem;
+  margin-bottom: 0.5rem;
+}
+
+.classic h4 {
+  font-size: 0.7rem;
+  color: var(--ink-dim);
+  margin-bottom: 0.4rem;
 }
 
 .classic section {
@@ -345,3 +655,957 @@
 .classic dd {
   margin: 0 0 0.5rem;
 }
+
+/* ------------------------------------------------------------------ */
+/* Touch controls                                                      */
+/* ------------------------------------------------------------------ */
+
+/* The wrapper spans the stage but ignores pointers, so only the buttons
+   themselves are interactive and the rest of the village stays visible and
+   untouched underneath. */
+.touch-controls {
+  position: absolute;
+  inset: auto 0 0 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  padding: 1rem;
+  /* Clear of the home-indicator strip on notched phones. */
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  pointer-events: none;
+}
+
+.touch-dpad {
+  display: grid;
+  /* 3x3 grid with the centre empty — the classic cross layout. */
+  grid-template-columns: repeat(3, 3.25rem);
+  grid-template-rows: repeat(3, 3.25rem);
+  gap: 0.2rem;
+}
+
+.touch-dpad-up {
+  grid-area: 1 / 2;
+}
+.touch-dpad-left {
+  grid-area: 2 / 1;
+}
+.touch-dpad-right {
+  grid-area: 2 / 3;
+}
+.touch-dpad-down {
+  grid-area: 3 / 2;
+}
+
+.touch-btn {
+  pointer-events: auto;
+  display: grid;
+  place-items: center;
+  background: rgba(23, 33, 44, 0.82);
+  border: 2px solid var(--border);
+  border-radius: 10px;
+  color: var(--ink);
+  font-size: 1.1rem;
+  /* Stops the browser treating a press as a scroll/zoom gesture, which would
+     otherwise steal the drag and pan the page instead of moving the player. */
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  cursor: pointer;
+}
+
+.touch-btn:active {
+  background: var(--accent);
+  color: #0d1b0d;
+  border-color: var(--accent);
+}
+
+.touch-interact {
+  width: 4.5rem;
+  height: 4.5rem;
+  border-radius: 50%;
+  font-family: var(--font-pixel);
+  font-size: 1.1rem;
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ------------------------------------------------------------------ */
+/* Controls hint                                                       */
+/* ------------------------------------------------------------------ */
+
+.controls-hint {
+  position: absolute;
+  top: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(26rem, calc(100% - 2rem));
+  background: var(--panel);
+  border: 3px solid var(--ink);
+  box-shadow:
+    0 0 0 3px #0d141c,
+    0 0 0 6px var(--accent);
+  padding: 1rem 1.15rem;
+  z-index: 5;
+}
+
+.controls-hint-title {
+  margin: 0 0 0.75rem;
+  font-size: 0.75rem;
+  color: var(--accent);
+}
+
+.controls-hint-list {
+  margin: 0 0 1rem;
+  padding-left: 1.1rem;
+  font-size: 0.9rem;
+  color: var(--ink-dim);
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.controls-hint-dismiss {
+  background: var(--accent);
+  color: #0d1b0d;
+  border: none;
+  border-radius: 6px;
+  padding: 0.5rem 1rem;
+  font-weight: 700;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+:where(.controls-hint) kbd {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.1rem 0.4rem;
+  font-size: 0.8rem;
+}
+
+/* ------------------------------------------------------------------ */
+/* Narrow screens (phones, ~375px and up)                              */
+/* ------------------------------------------------------------------ */
+
+@media (max-width: 560px) {
+  /* Two rows: brand + actions on top, the scrolling link strip beneath.
+     Keeps the bar to a predictable height instead of reflowing into three
+     ragged rows and stealing the game's vertical space. */
+  .topbar-inner {
+    gap: 0.5rem 0.75rem;
+    padding: 0.5rem 0.75rem;
+  }
+
+  .topbar-brand {
+    flex: 1 1 auto;
+    font-size: 0.6rem;
+  }
+
+  .topbar-links {
+    order: 3;
+    flex-basis: 100%;
+    gap: 0.75rem;
+  }
+
+  .topbar-link {
+    font-size: 0.85rem;
+  }
+
+  .topbar-toggle {
+    font-size: 0.75rem;
+    padding: 0.4rem 0.6rem;
+  }
+
+  /* The slider is the first thing to go — the mute button alone is the
+     control that matters on a phone, and it stays a full 44px target. */
+  .audio-volume {
+    display: none;
+  }
+
+  /* Sit the dialogue above the D-pad rather than on top of it. */
+  .dialogue-backdrop {
+    padding: 0.75rem;
+  }
+
+  .dialogue {
+    padding: 0.85rem;
+    /* Never taller than the stage; long bullet lists scroll inside the frame
+       instead of pushing the footer buttons off-screen. */
+    max-height: calc(100dvh - 8rem);
+    overflow-y: auto;
+  }
+
+  .dialogue-title {
+    font-size: 0.7rem;
+  }
+
+  .dialogue-text {
+    font-size: 0.9rem;
+    min-height: 6em;
+  }
+
+  .game-prompt {
+    /* Clear of the touch controls, and allowed to wrap — station names like
+       "Accountability & Hopeful Fridays Desk" do not fit on one 375px line. */
+    bottom: 9.5rem;
+    max-width: calc(100% - 2rem);
+    white-space: normal;
+    text-align: center;
+    font-size: 0.85rem;
+  }
+
+  .controls-hint {
+    top: 0.75rem;
+  }
+
+  .classic {
+    padding: 1rem 0.9rem 3rem;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Landing hero (the top of `/`, above the readable portfolio)         */
+/* ------------------------------------------------------------------ */
+
+/* The hero fills the first screen so it still lands like a title card, but it
+   is part of the same document as the content below rather than an
+   interstitial. Scrolling past it is the "skip" action. */
+.landing-hero {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: min(30rem, 78vh);
+  padding: 2rem 0 1rem;
+  border-bottom: 2px solid var(--border);
+}
+
+.landing-hero .landing-eyebrow {
+  margin-bottom: 0.75rem;
+}
+
+.landing-hero h1 {
+  font-family: var(--font-pixel);
+  line-height: 1.5;
+  margin-bottom: 1rem;
+}
+
+.landing-hero .landing-tagline {
+  max-width: 42rem;
+}
+
+/* ------------------------------------------------------------------ */
+/* Classic mode layout                                                 */
+/* ------------------------------------------------------------------ */
+
+.classic-nav {
+  margin: 1.5rem 0 0;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.classic-nav ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.classic-nav a {
+  font-family: var(--font-pixel);
+  font-size: 0.6rem;
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+  padding-bottom: 0.2rem;
+}
+
+.classic-nav a:hover,
+.classic-nav a[aria-current='page'] {
+  border-bottom-color: var(--accent);
+}
+
+.classic-section {
+  border-top: 1px solid var(--border);
+  padding-top: 1.5rem;
+}
+
+.classic-single .classic-section {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.classic-card {
+  background: var(--panel);
+  border: 2px solid var(--border);
+  padding: 1rem 1.1rem;
+  margin-bottom: 1.25rem;
+}
+
+.classic-meta {
+  color: var(--ink-dim);
+  font-size: 0.9rem;
+}
+
+.classic-facts {
+  display: grid;
+  grid-template-columns: minmax(8rem, max-content) 1fr;
+  gap: 0.35rem 1rem;
+  margin: 0.75rem 0 1rem;
+}
+
+/* dl children are wrapped in <div> so each pair stays together; the grid is
+   applied to those wrappers via display: contents so dt/dd still align as
+   two real columns. */
+.classic-facts > div {
+  display: contents;
+}
+
+.classic-facts dt {
+  color: var(--ink-dim);
+}
+
+.classic-links {
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.classic-achievements {
+  padding-left: 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.classic-crosslink {
+  margin-top: 1.25rem;
+  padding-top: 0.75rem;
+  border-top: 1px dashed var(--border);
+  color: var(--ink-dim);
+  font-size: 0.95rem;
+}
+
+.classic-pager {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 2.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+  font-family: var(--font-pixel);
+  font-size: 0.6rem;
+}
+
+.classic-pager a {
+  text-decoration: none;
+}
+
+.classic-pager a:hover {
+  text-decoration: underline;
+}
+
+.classic-footer {
+  margin-top: 3rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+  color: var(--ink-dim);
+  font-size: 0.9rem;
+}
+
+.classic-bio {
+  display: flex;
+  gap: 1.25rem;
+  align-items: flex-start;
+}
+
+/* Fixed ratio via the width/height attributes on the <img>, so the browser
+   reserves the right box before the file arrives and the text below does not
+   jump when it loads. */
+/* The <picture> is now the flex item, not the <img> inside it. */
+.classic-bio > picture {
+  flex: 0 0 auto;
+  display: block;
+}
+
+.classic-headshot {
+  flex: 0 0 auto;
+  width: 9rem;
+  height: auto;
+  aspect-ratio: 440 / 451;
+  object-fit: cover;
+  border: 2px solid var(--border);
+  background: var(--panel);
+}
+
+@media (max-width: 560px) {
+  .classic-bio {
+    flex-direction: column;
+  }
+
+  .classic-headshot {
+    width: 7rem;
+  }
+
+  .classic-facts {
+    grid-template-columns: 1fr;
+    gap: 0 0;
+  }
+
+  .classic-facts dd {
+    margin-bottom: 0.6rem;
+  }
+
+  .classic-pager {
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Credits                                                             */
+/* ------------------------------------------------------------------ */
+
+.credits-group {
+  margin-top: 2rem;
+}
+
+.credits-entry {
+  border-left: 2px solid var(--border);
+  padding-left: 0.9rem;
+  margin-bottom: 1.25rem;
+}
+
+.credits-meta {
+  color: var(--ink-dim);
+  font-size: 0.9rem;
+}
+
+.credits-source a {
+  font-size: 0.85rem;
+  word-break: break-all;
+}
+
+.credits-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: rgb(6 10 14 / 82%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.credits-modal {
+  background: var(--panel);
+  border: 2px solid var(--border);
+  max-width: 44rem;
+  width: 100%;
+  max-height: 85dvh;
+  overflow-y: auto;
+  padding: 1.25rem;
+}
+
+.credits-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.credits-modal h2 {
+  font-family: var(--font-pixel);
+  font-size: 0.8rem;
+  color: var(--accent);
+}
+
+.credits-modal h3 {
+  font-family: var(--font-pixel);
+  font-size: 0.65rem;
+  margin: 1.25rem 0 0.5rem;
+}
+
+.credits-modal h4 {
+  font-size: 0.95rem;
+  margin-bottom: 0.25rem;
+}
+
+.credits-modal a {
+  color: var(--accent);
+}
+
+.credits-close {
+  font-family: var(--font-pixel);
+  font-size: 0.6rem;
+  background: transparent;
+  color: var(--ink);
+  border: 2px solid var(--border);
+  padding: 0.45rem 0.7rem;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.credits-close:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ------------------------------------------------------------------ */
+/* 404                                                                 */
+/* ------------------------------------------------------------------ */
+
+.notfound {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  max-width: 52rem;
+  width: 100%;
+  margin: 0 auto;
+  padding: 1.5rem 1rem 4rem;
+}
+
+/* A few hard-edged blocks rather than a real canvas: a mistyped URL should
+   not cost the visitor a 214 kB game engine download. */
+.notfound-scene {
+  position: relative;
+  height: 11rem;
+  border: 2px solid var(--border);
+  overflow: hidden;
+  image-rendering: pixelated;
+}
+
+.notfound-sky {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(#1b2b3d 0%, #24405a 60%, #2f5570 100%);
+}
+
+.notfound-hill {
+  position: absolute;
+  left: -10%;
+  right: -10%;
+  bottom: 3.2rem;
+  height: 4rem;
+  background: #3f7a43;
+  border-radius: 50% 50% 0 0 / 100% 100% 0 0;
+}
+
+.notfound-ground {
+  position: absolute;
+  inset: auto 0 0;
+  height: 3.4rem;
+  background:
+    repeating-linear-gradient(90deg, #4d9450 0 8px, #468a4a 8px 16px);
+  border-top: 3px solid #2f6a38;
+}
+
+.notfound-sign {
+  position: absolute;
+  left: 50%;
+  bottom: 2.4rem;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.notfound-sign-board {
+  font-family: var(--font-pixel);
+  font-size: 1.1rem;
+  color: #3b2b1d;
+  background: #b98b4e;
+  border: 3px solid #6f4b26;
+  padding: 0.6rem 1.1rem;
+  line-height: 1;
+}
+
+.notfound-sign-post {
+  width: 0.9rem;
+  height: 2.2rem;
+  background: #6f4b26;
+}
+
+.notfound-copy {
+  margin-top: 2rem;
+}
+
+.notfound-code {
+  font-family: var(--font-pixel);
+  font-size: 0.6rem;
+  color: var(--ink-dim);
+  margin-bottom: 0.75rem;
+}
+
+.notfound h1 {
+  font-family: var(--font-pixel);
+  font-size: clamp(0.95rem, 4vw, 1.4rem);
+  line-height: 1.5;
+  margin-bottom: 1rem;
+}
+
+.notfound-actions {
+  margin: 1.5rem 0;
+}
+
+.notfound-primary {
+  display: inline-block;
+  font-family: var(--font-pixel);
+  font-size: 0.65rem;
+  text-decoration: none;
+  background: var(--accent);
+  color: #10171f;
+  border: 2px solid var(--accent);
+  padding: 0.7rem 1rem;
+}
+
+.notfound-primary:hover {
+  filter: brightness(1.1);
+}
+
+.notfound-hint {
+  color: var(--ink-dim);
+  margin-bottom: 0.5rem;
+}
+
+.notfound-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1rem;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.notfound-links a {
+  color: var(--accent);
+}
+
+/* ------------------------------------------------------------------ */
+/* Game view wrapper                                                   */
+/* ------------------------------------------------------------------ */
+
+.game-view {
+  flex: 1 1 auto;
+  display: flex;
+  min-height: 0;
+}
+
+/* ------------------------------------------------------------------ */
+/* Project detail pages + village detail blocks                        */
+/* ------------------------------------------------------------------ */
+
+/* `.detail-page` is the classic-mode `/projects/<id>` article; `DetailBlock`
+   markup is also rendered bare inside `.dialogue-blocks` (see below), so
+   every rule here is written to work in both places rather than assuming
+   `.classic` ancestry. */
+
+.detail-hero {
+  margin-bottom: 0.25rem;
+}
+
+.detail-eyebrow {
+  font-family: var(--font-pixel);
+  font-size: 0.6rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin: 0 0 0.6rem;
+}
+
+.detail-intro {
+  font-size: 1.05rem;
+  color: var(--ink-dim);
+  max-width: 42rem;
+}
+
+.detail-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  list-style: none;
+  padding: 0;
+  margin: 0.75rem 0 0;
+}
+
+.detail-badges li {
+  border: 2px solid var(--accent);
+  color: var(--accent);
+  font-size: 0.75rem;
+  padding: 0.2rem 0.6rem;
+}
+
+.detail-hero-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  list-style: none;
+  padding: 0;
+  margin: 1.1rem 0 0;
+}
+
+.detail-hero-link {
+  display: inline-block;
+  border: 2px solid var(--accent);
+  color: var(--accent);
+  text-decoration: none;
+  font-size: 0.85rem;
+  padding: 0.4rem 0.85rem;
+}
+
+.detail-hero-link:hover {
+  background: var(--accent);
+  color: var(--panel);
+}
+
+/* Separates one block from the next, but only when they're laid out as
+   siblings in the full page — inside the village dialogue, only one block is
+   ever mounted at a time, so this never fires there. */
+.detail-page > * + * {
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border);
+}
+
+/* A block's own title. Deliberately sized by class rather than by heading
+   level, since the same block renders as an <h2> on the full page and an
+   <h3> inside the dialogue box — it should look identical either way. */
+.detail-block > :where(h2, h3, h4, h5, h6) {
+  font-size: 0.85rem;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin: 0 0 0.75rem;
+}
+
+.detail-blurb {
+  color: var(--ink-dim);
+  margin: 0 0 1rem;
+}
+
+.detail-media {
+  margin: 0;
+}
+
+.detail-media video,
+.detail-media img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 2px solid var(--border);
+  background: #000;
+}
+
+.detail-media figcaption {
+  margin-top: 0.5rem;
+  color: var(--ink-dim);
+  font-size: 0.9rem;
+}
+
+.detail-list {
+  padding-left: 1.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.detail-list-negative {
+  padding-left: 0;
+  list-style: none;
+}
+
+.detail-list-negative li {
+  padding-left: 1.6rem;
+  position: relative;
+}
+
+.detail-list-negative li::before {
+  content: '✗';
+  position: absolute;
+  left: 0;
+  color: #e0655a;
+  font-weight: 700;
+}
+
+.detail-steps {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+}
+
+.detail-steps > li {
+  display: flex;
+  gap: 0.85rem;
+  align-items: flex-start;
+}
+
+.detail-step-num {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.6rem;
+  height: 1.6rem;
+  border: 2px solid var(--accent);
+  color: var(--accent);
+  font-family: var(--font-pixel);
+  font-size: 0.65rem;
+}
+
+.detail-steps > li > div {
+  min-width: 0;
+}
+
+.detail-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  gap: 0.85rem;
+}
+
+.detail-card {
+  border: 2px solid var(--border);
+  background: var(--panel);
+  padding: 0.85rem 1rem;
+}
+
+.detail-card p {
+  margin: 0;
+  color: var(--ink-dim);
+}
+
+.detail-columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  gap: 1.25rem;
+}
+
+.detail-column ul {
+  padding-left: 1.1rem;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  color: var(--ink-dim);
+}
+
+.detail-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: 1rem;
+}
+
+.detail-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  border-left: 3px solid var(--accent);
+  padding-left: 0.75rem;
+}
+
+.detail-stat-value {
+  font-family: var(--font-pixel);
+  font-size: 1.4rem;
+  color: var(--accent);
+}
+
+.detail-stat-label {
+  color: var(--ink-dim);
+  font-size: 0.85rem;
+}
+
+/* Escaped by React (block.source is rendered as text, never HTML) and kept
+   to its own horizontally-scrolling box, so a long line in a code sample or
+   an ASCII diagram never widens the page — or, inside the dialogue, the
+   panel — itself. */
+.detail-code {
+  margin: 0;
+  overflow-x: auto;
+  background: #0d141c;
+  border: 2px solid var(--border);
+  padding: 0.85rem 1rem;
+}
+
+.detail-code code {
+  font-family: var(--font-pixel), ui-monospace, 'Courier New', monospace;
+  font-size: 0.75rem;
+  line-height: 1.7;
+  white-space: pre;
+  color: var(--ink);
+}
+
+.detail-table-wrap {
+  overflow-x: auto;
+  border: 2px solid var(--border);
+}
+
+.detail-table-wrap table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.detail-table-wrap th,
+.detail-table-wrap td {
+  text-align: left;
+  padding: 0.5rem 0.85rem;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.detail-table-wrap thead th {
+  color: var(--accent);
+  background: var(--panel);
+}
+
+.detail-table-wrap tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.detail-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.detail-chips li {
+  border: 2px solid var(--border);
+  padding: 0.2rem 0.6rem;
+  font-size: 0.8rem;
+  color: var(--ink-dim);
+}
+
+/* The scrollable body of the village dialogue's "blocks" phase — one
+   DetailBlock at a time, paged with the same Space/E/Enter that advances the
+   typewriter lines. Content can run much longer than a line of dialogue (a
+   video, a six-card grid, a full comparison table), so this — unlike
+   `.dialogue-text`/`.dialogue-card` — scrolls instead of assuming it fits. */
+.dialogue-blocks {
+  min-height: 4.5em;
+  max-height: min(60vh, 420px);
+  overflow-y: auto;
+  margin: 0 0 0.9rem;
+  /* Scrolling this shouldn't advance/close the dialogue the way clicking
+     empty space in it does; DialogueBox stops click propagation here. */
+  cursor: auto;
+}
+
+@media (max-width: 560px) {
+  .detail-cards,
+  .detail-columns {
+    grid-template-columns: 1fr;
+  }
+
+  .detail-intro {
+    font-size: 1rem;
+  }
+}
+

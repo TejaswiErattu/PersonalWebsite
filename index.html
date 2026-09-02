@@ -2,11 +2,38 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <!--
+      Icon set. The SVG is the primary icon because it stays sharp at any size
+      and is what modern browsers prefer; the PNGs exist for the places that
+      still cannot read SVG — notably iOS home-screen bookmarks, which need a
+      real apple-touch-icon at 180x180 or they will screenshot the page and
+      use that instead.
+    -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <meta name="theme-color" content="#10171f" />
+
     <meta
       name="description"
       content="Tejaswi Erattu Taj — software and security engineer. Explore the portfolio as a village, or read it as a classic page."
+    />
+    <!--
+      Pixel font for headings only. Body copy stays on the system UI stack,
+      which is far more legible at small sizes and costs no download.
+      `display=swap` means text paints immediately in the fallback and
+      re-renders when the pixel font lands, so a slow font never blocks
+      first paint.
+    -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap"
     />
     <title>Tejaswi Erattu Taj — Software &amp; Security Engineer</title>
   </head>

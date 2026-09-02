@@ -10,7 +10,13 @@
  *   P  player spawn point (walkable, renders as path)
  *   ~  water (solid)
  *   T  tree (solid)
- *   +  signpost (solid)
+ *   +  signpost (solid) — village directory, top yard
+ *   1  signpost (solid) — Library <-> Cozy House
+ *   6  signpost (solid) — Cozy House <-> Tech Lab
+ *   2  signpost (solid) — Tech Lab <-> Security Center
+ *   3  signpost (solid) — Trophy Garden <-> Chicken Pen
+ *   4  signpost (solid) — Chicken Pen <-> Town Hall
+ *   5  signpost (solid) — Town Hall <-> Mailbox
  *   L  Library            -> education
  *   H  Cozy House         -> about
  *   B  Tech Lab           -> projects
@@ -33,19 +39,19 @@ export const MAP: string[] = [
   '~~T..........................................T~~',
   '~~T....................+.....................T~~',
   '~~T..........................................T~~',
-  '~~T..LLLLLLL..HHHHHHHH..BBBBBBBBBB..SSSSSSSSST~~',
-  '~~T..LLLLLLL..HHHHHHHH..BBBBBBBBBB..SSSSSSSSST~~',
-  '~~T..LLLLLLL..HHHHHHHH..BBBBBBBBBB..SSSSSSSSST~~',
-  '~~T..LLLLLLL..HHHHHHHH..BBBBBBBBBB..SSSSSSSSST~~',
-  '~~T..LLLLLLL..HHHHHHHH..BBBBBBBBBB..SSSSSSSSST~~',
-  '~~T..........................................T~~',
+  '~~T..LLLLLLLL.HHHHHHHH..BBBBBBBBBB..SSSSSSSSST~~',
+  '~~T..LLLLLLLL.HHHHHHHH..BBBBBBBBBB..SSSSSSSSST~~',
+  '~~T..LLLLLLLL.HHHHHHHH..BBBBBBBBBB..SSSSSSSSST~~',
+  '~~T..LLLLLLLL.HHHHHHHH..BBBBBBBBBB..SSSSSSSSST~~',
+  '~~T..LLLLLLLL.HHHHHHHH..BBBBBBBBBB..SSSSSSSSST~~',
+  '~~T..........1.........6...........2.........T~~',
   '~~T,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,T~~',
   '~~T,,,,,,,,,,,,,,,,,,,,P,,,,,,,,,,,,,,,,,,,,,T~~',
   '~~T..........................................T~~',
-  '~~T.GGGGGGGG...CCCCCCCC...MMMMMMMM...XXXXXX..T~~',
-  '~~T.GGGGGGGG...CCCCCCCC...MMMMMMMM...XXXXXX..T~~',
-  '~~T.GGGGGGGG...CCCCCCCC...MMMMMMMM...XXXXXX..T~~',
-  '~~T.GGGGGGGG...CCCCCCCC...MMMMMMMM...XXXXXX..T~~',
+  '~~T.GGGGGGGGG3.CCCCCCCC.4.MMMMMMMM.5.XXXXXX..T~~',
+  '~~T.GGGGGGGGG..CCCCCCCC...MMMMMMMM...XXXXXX..T~~',
+  '~~T.GGGGGGGGG..CCCCCCCC...MMMMMMMM...XXXXXX..T~~',
+  '~~T.GGGGGGGGG..CCCCCCCC...MMMMMMMM...XXXXXX..T~~',
   '~~T..........................................T~~',
   '~~T..........................................T~~',
   '~~TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT~~',
@@ -57,7 +63,7 @@ export const MAP: string[] = [
 export const GRASS_COLOR = '#63a34a'
 
 export interface TileSpec {
-  /** Fill colour of the placeholder rectangle. */
+  /** Fill colour of the tile's rectangle. */
   color: string
   /** Whether the player collides with it. */
   solid: boolean
@@ -73,6 +79,18 @@ export const TILES: Record<string, TileSpec> = {
   '~': { color: '#3f72a4', solid: true, label: 'Water' },
   T: { color: '#2f6b3a', solid: true, label: 'Tree' },
   '+': { color: '#8a5a2b', solid: true, label: 'Signpost' },
+  // '1'-'6' sit in single-tile-wide gaps between buildings (the only path
+  // between an upper and lower row of stations). Unlike '+' — which stands
+  // in open yard with room to walk around it — these must stay walkable:
+  // if they were solid, the player's collision would stop at the tile
+  // boundary, which lands just outside the interact radius and also walls
+  // off the one lane connecting the two buildings on either side.
+  '1': { color: '#8a5a2b', solid: false, label: 'Signpost' },
+  '2': { color: '#8a5a2b', solid: false, label: 'Signpost' },
+  '3': { color: '#8a5a2b', solid: false, label: 'Signpost' },
+  '4': { color: '#8a5a2b', solid: false, label: 'Signpost' },
+  '5': { color: '#8a5a2b', solid: false, label: 'Signpost' },
+  '6': { color: '#8a5a2b', solid: false, label: 'Signpost' },
   ',': { color: '#c8b184', solid: false, label: 'Path' },
   P: { color: '#c8b184', solid: false, label: 'Path' },
   L: { color: '#7a5230', solid: true, label: 'Library' },
@@ -88,6 +106,18 @@ export const TILES: Record<string, TileSpec> = {
 /** World size in pixels, derived from the map so the two can never disagree. */
 export const WORLD_WIDTH = MAP[0].length * TILE_SIZE
 export const WORLD_HEIGHT = MAP.length * TILE_SIZE
+
+/**
+ * Minimum centre-to-centre distance, in world pixels, between two station
+ * triggers inside the same multi-station building. Below this the player
+ * (a 16px-wide sprite) cannot reliably stand in front of one station without
+ * also being within a neighbour's radius — `InteractionRegistry.nearest()`
+ * still resolves that correctly, but the player has no way to aim for a
+ * specific one. One tile is the practical floor; `assertStationSpacing()` in
+ * `locations.ts` enforces it at boot, the same way `assertMapIsRectangular`
+ * enforces the map shape below.
+ */
+export const MIN_STATION_SPACING = TILE_SIZE
 
 /**
  * Guards against the single easiest way to break an ASCII map: a row that is

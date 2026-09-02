@@ -1,12 +1,15 @@
 /**
- * Placeholder player art, generated at runtime.
+ * Player art, drawn at runtime into an offscreen canvas.
  *
- * Phase 1 has no downloaded asset packs yet, so instead of shipping a broken
- * image reference we draw a 4-direction x 4-frame walk cycle into an offscreen
- * canvas and hand Kaplay the resulting data URL. When the real Sprout Lands
- * character art lands, only `createPlayerSpriteSheet` needs to be swapped for a
- * `loadSprite("player", "/sprites/player.png", ...)` call — the frame layout
- * and animation names below are already the standard 4x4 sheet layout.
+ * The whole character is generated in code rather than shipped as a PNG: a
+ * 4-direction x 4-frame walk cycle costs about a hundred lines here and zero
+ * bytes over the network, and it keeps the palette editable as constants
+ * instead of locked inside an image. The canvas is handed straight to Kaplay,
+ * which uploads it to the GPU as a texture.
+ *
+ * The layout is the conventional 4x4 sheet, so swapping in a downloaded sheet
+ * later means changing only `createPlayerSpriteSheet` — the frame indices and
+ * animation names below already match.
  */
 
 /** Width and height of a single frame, in pixels. Matches TILE_SIZE. */
@@ -98,10 +101,10 @@ function drawFrame(
 }
 
 /**
- * Builds the sheet and returns it as a PNG data URL that Kaplay can load.
+ * Builds the sheet and hands back the canvas for Kaplay to upload directly.
  * Layout: 4 columns (frames) x 4 rows (directions).
  */
-export function createPlayerSpriteSheet(): string {
+export function createPlayerSpriteSheet(): HTMLCanvasElement {
   const canvas = document.createElement('canvas')
   canvas.width = FRAME_SIZE * FRAMES_PER_DIRECTION
   canvas.height = FRAME_SIZE * DIRECTIONS.length
@@ -118,5 +121,5 @@ export function createPlayerSpriteSheet(): string {
     }
   })
 
-  return canvas.toDataURL()
+  return canvas
 }
