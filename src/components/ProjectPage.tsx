@@ -1,15 +1,15 @@
-import { content, sections } from '../content/content'
+import { content } from '../content/content'
 import { Link } from '../router'
-import { projectRoutes, sectionRoutes, type RouteMeta } from '../seo/routes'
+import { projectRoutes, type RouteMeta } from '../seo/routes'
 import { DetailBlockView } from './DetailBlockView'
 
 /**
  * One project's long-form write-up, at its own URL (e.g. `/projects/findar`).
  *
- * Ported from the old portfolio's in-depth pages. Carries the same section
- * nav as `SectionPage` — so a crawler landing here can still reach every
- * other part of the site — plus a project-specific pager that pages through
- * `projectRoutes` instead, wrapping out to `/projects` at either end.
+ * Ported from the old portfolio's in-depth pages. The global nav (`TopBar`)
+ * already reaches every primary section, so this page carries only a
+ * project-specific pager that pages through `projectRoutes`, wrapping out to
+ * `/projects` at either end — no second copy of the section list.
  */
 export default function ProjectPage({ route }: { route: RouteMeta }) {
   if (!route.project) throw new Error(`Route ${route.id} has no project`)
@@ -24,29 +24,10 @@ export default function ProjectPage({ route }: { route: RouteMeta }) {
   const previous = index > 0 ? projectRoutes[index - 1] : undefined
   const next = index < projectRoutes.length - 1 ? projectRoutes[index + 1] : undefined
 
-  const labelFor = (candidate: RouteMeta) =>
-    sections.find((section) => section.id === candidate.section)?.label ?? candidate.heading
-
   return (
     <main className="classic classic-single">
-      <nav className="classic-nav" aria-label="Portfolio sections">
-        <ul>
-          <li>
-            <Link to="/">Overview</Link>
-          </li>
-          {sectionRoutes.map((candidate) => (
-            <li key={candidate.id}>
-              <Link
-                to={candidate.path}
-                aria-current={candidate.section === 'projects' ? 'page' : undefined}
-              >
-                {labelFor(candidate)}
-              </Link>
-            </li>
-          ))}
-        </ul>
-      </nav>
-
+      {/* No second nav list here — the single global nav (TopBar) already
+          links to every primary section; the pager below covers the rest. */}
       <article className="detail-page">
         <header className="detail-hero">
           {detail.eyebrow && <p className="detail-eyebrow">{detail.eyebrow}</p>}

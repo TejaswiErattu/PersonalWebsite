@@ -2,8 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { blip } from '../audio/audio'
 import { createGame, type GameHandle } from '../game/createGame'
-import { experienceDialogue, type Dialogue } from '../game/locations'
+import { experienceDialogue, type ContextualActionId, type Dialogue } from '../game/locations'
 import useIsTouchDevice from '../hooks/useIsTouchDevice'
+import ContextualActionButton from './ContextualActionButton'
 import ControlsHint from './ControlsHint'
 import DialogueBox from './DialogueBox'
 import LoadingScreen from './LoadingScreen'
@@ -36,6 +37,15 @@ export default function GameCanvas() {
 
   const [prompt, setPrompt] = useState<string | null>(null)
   const [dialogue, setDialogue] = useState<Dialogue | null>(null)
+  const [contextualAction, setContextualAction] = useState<ContextualActionId | null>(null)
+  /**
+   * True while the greenhouse's planting bed is full — the game clears the
+   * finished garden a few seconds later and flips this back, so it reads as
+   * a pause between rounds rather than a permanent stop. Lives here rather
+   * than inside `ContextualActionButton` so it survives that component
+   * unmounting while a dialogue is open.
+   */
+  const [gardenFull, setGardenFull] = useState(false)
   /** Real 0..1 from Kaplay's asset loader; 1 once every sprite is decoded. */
   const [loadProgress, setLoadProgress] = useState(0)
   const [ready, setReady] = useState(false)
@@ -65,6 +75,8 @@ export default function GameCanvas() {
         blip('open')
         setDialogue(next)
       },
+      onContextualActionChange: setContextualAction,
+      onGardenFullChange: setGardenFull,
       onLoadProgress: setLoadProgress,
       onReady: () => setReady(true),
     })
@@ -113,6 +125,24 @@ export default function GameCanvas() {
     handleRef.current?.triggerInteract()
   }, [])
 
+  /** Dispatches a contextual button press to the matching `GameHandle` stub. */
+  const handleContextualTrigger = useCallback((action: ContextualActionId) => {
+    switch (action) {
+      case 'incomingTrain':
+        handleRef.current?.triggerIncomingTrain()
+        break
+      case 'plantMore':
+        handleRef.current?.triggerPlantMore()
+        break
+      case 'dropFeed':
+        handleRef.current?.triggerDropFeed()
+        break
+      case 'sendMail':
+        handleRef.current?.triggerSendMail()
+        break
+    }
+  }, [])
+
   return (
     <div className="game-stage">
       <div className="game-viewport" ref={containerRef} />
@@ -142,6 +172,22 @@ export default function GameCanvas() {
           jabbed at a frozen world behind the overlay. */}
       {ready && isTouch && !dialogue && (
         <TouchControls onMove={handleTouchMove} onInteract={handleTouchInteract} />
+      )}
+
+      {/* Unmounting (rather than just visually hiding) while a dialogue is
+          open is what "hide contextual actions while a content overlay is
+          open" means here — there is no disabled husk left behind to trip
+          over, and any pending cooldown timer is torn down by the
+          component's own unmount cleanup. */}
+      {ready && !dialogue && (
+        <ContextualActionButton
+          action={contextualAction}
+          isTouch={isTouch}
+          onTrigger={handleContextualTrigger}
+          disabledMessage={
+            contextualAction === 'plantMore' && gardenFull ? 'The garden is full!' : undefined
+          }
+        />
       )}
 
       {dialogue && (

@@ -2,8 +2,16 @@ import kaplay, { type KAPLAYCtx, type GameObj } from 'kaplay'
 
 import { canStandAt } from './collision'
 import { InteractionRegistry } from './interactions'
-import { BUILDING_SYMBOLS, LOCATIONS, SIGNPOSTS, assertStationSpacing, type Dialogue } from './locations'
-import { buildScenery, loadScenerySprites } from './scenery'
+import {
+  BUILDING_SYMBOLS,
+  LOCATIONS,
+  SIGNPOSTS,
+  SIGNPOST_SYMBOLS,
+  assertStationSpacing,
+  type ContextualActionId,
+  type Dialogue,
+} from './locations'
+import { FLOWER_Z, buildScenery, loadScenerySprites } from './scenery'
 import {
   GRASS_COLOR,
   MAP,
@@ -24,7 +32,19 @@ import {
   walkAnim,
   type Direction,
 } from './sprites'
-import { createBuildingSprite, createCueSprite, createSecurityCenterSprite } from './worldSprites'
+import {
+  FLOWER_VARIANTS,
+  TRAIN_WIDTH,
+  createBuildingSprite,
+  createCueSprite,
+  createFarmSprite,
+  createFeedPileSprite,
+  createEnvelopeSprite,
+  createRailSprite,
+  createSignpostSprite,
+  createTrainSprite,
+  postOfficeChimneyMouth,
+} from './worldSprites'
 
 /** Player walking speed, in world pixels per second. */
 const PLAYER_SPEED = 78
@@ -59,6 +79,23 @@ const CAMERA_FOLLOW = 12
  */
 const CAMERA_FOLLOW_REDUCED = 60
 
+/**
+ * How close, in world pixels from a building's edge, counts as "approaching"
+ * it for the purposes of the camera zoom-in. Comfortably outside every
+ * building's station radius, so the zoom has settled in by the time a
+ * station's cue appears rather than starting at the same instant.
+ */
+const NEAR_BUILDING_RADIUS = 56
+
+/** Extra zoom applied on top of the base zoom while near a building. */
+const NEAR_BUILDING_ZOOM = 1.25
+
+/** Higher = the zoom eases toward its target faster. Same idea as CAMERA_FOLLOW. */
+const CAMERA_ZOOM_FOLLOW = 6
+
+/** Near-instant zoom transition under reduced motion, mirroring CAMERA_FOLLOW_REDUCED. */
+const CAMERA_ZOOM_FOLLOW_REDUCED = 60
+
 /** True when the OS/browser asks for reduced motion. Re-read per boot. */
 function prefersReducedMotion(): boolean {
   return (
@@ -71,6 +108,12 @@ const BUILDING_Z = 1
 const PLAYER_Z = 10
 /** The cue floats above everything so a building can never cover it. */
 const CUE_Z = 20
+/**
+ * Same layer as the player — the train is a foreground vehicle passing
+ * through the street, not backdrop scenery at `BUILDING_Z`, which would let
+ * a signpost (also `BUILDING_Z`) drawn later in the same frame cover it.
+ */
+const TRAIN_Z = PLAYER_Z
 
 /**
  * How close the player's centre must get to a door before it responds, in
@@ -94,6 +137,116 @@ const STATION_INTERACT_RADIUS = 20
  * post to walk up to.
  */
 const SIGNPOST_INTERACT_RADIUS = 16
+
+/**
+ * How close, in world pixels from a special location's edge, shows its
+ * contextual action button (Incoming Train, Plant More, Drop Feed, Send
+ * Mail). Generous on purpose — this is a coarse "you're at this location"
+ * signal, not a precise station target the way `STATION_INTERACT_RADIUS` is,
+ * so it roughly matches `NEAR_BUILDING_RADIUS`'s camera zoom-in range.
+ */
+const SPECIAL_ACTION_RADIUS = NEAR_BUILDING_RADIUS
+
+/**
+ * Incoming Train tuning. The train travels the full world width (off one
+ * edge, through the station, off the other), slowing within
+ * `TRAIN_SLOW_RADIUS` of the station centre and holding there for
+ * `TRAIN_HOLD_SECONDS` before continuing off in the same direction it
+ * arrived. At `TRAIN_CRUISE_SPEED` the full journey comfortably finishes
+ * inside the contextual button's ~10s cooldown (see
+ * `ContextualActionButton`'s `COOLDOWN_MS`), so the button stays disabled
+ * for the entire time the train is on screen.
+ */
+const TRAIN_CRUISE_SPEED = 200
+const TRAIN_SLOW_RADIUS = 110
+const TRAIN_MIN_SPEED_FACTOR = 0.15
+const TRAIN_HOLD_SECONDS = 3
+/** Under reduced motion the train never moves — just appears, sits briefly, and is gone. */
+const TRAIN_REDUCED_HOLD_SECONDS = 2.5
+/**
+ * How far above the station's top edge the track sits, in world pixels —
+ * far enough to clear the roofline and sit in the open grass margin above
+ * the top row of buildings, not overlapping the station's own facade.
+ */
+const TRAIN_TRACK_OFFSET = 12
+
+/**
+ * Fixed, predetermined empty grass tiles near the Community Impact
+ * Greenhouse where "Plant More" is allowed to add a cluster — per spec, a
+ * fixed list rather than anything derived or random, so a click can never
+ * land on a building, path, water, tree, or interaction trigger. Column/row
+ * are `village.ts` map coordinates, hand-picked and confirmed grass ('.').
+ * Eleven sit in the open margin directly south of the greenhouse; one sits
+ * north of it, across the tree row. Exactly twelve, matching the session cap.
+ */
+const PLANT_MORE_TILES: readonly { col: number; row: number }[] = [
+  { col: 3, row: 29 },
+  { col: 4, row: 29 },
+  { col: 5, row: 29 },
+  { col: 6, row: 29 },
+  { col: 7, row: 29 },
+  { col: 8, row: 29 },
+  { col: 9, row: 29 },
+  { col: 10, row: 29 },
+  { col: 11, row: 29 },
+  { col: 12, row: 29 },
+  { col: 13, row: 29 },
+  // A second row in the open margin below, skipping col 9 where the
+  // greenhouse's signpost stands. Every tile has to be somewhere the player
+  // can actually walk to in a straight line from the bed, because the
+  // flower only blooms once they arrive — the old twelfth tile sat north of
+  // the greenhouse, walled off by the tree row, so the walk stalled against
+  // the building and the flower appeared a whole house away.
+  { col: 4, row: 30 },
+  { col: 7, row: 30 },
+  { col: 11, row: 30 },
+  { col: 13, row: 30 },
+]
+
+/**
+ * How long the finished garden is left standing before every flower is
+ * cleared at once and the bed is free to be replanted, in seconds. Flowers
+ * persist as they are planted (rather than each fading on its own timer), so
+ * this beat is the only chance to see all fifteen in bloom together.
+ */
+const GARDEN_FULL_HOLD = 3
+
+/** How close the player can be to a tile before it's skipped for that click. */
+const PLANT_MORE_PLAYER_CLEARANCE = 12
+
+/**
+ * Soft-lock guard for the "Plant More" auto-walk: if the player hasn't
+ * reached the planting tile within this many seconds (an unexpectedly long
+ * detour around collision, say), the flower plants anyway rather than
+ * leaving the click with no visible effect. `PLANT_MORE_PLAYER_CLEARANCE` is
+ * reused as the arrival distance — the same "close enough" radius already
+ * used to skip a tile the player is standing on, so the player visibly
+ * arrives at the spot without needing to land exactly on the flower's centre
+ * (which would otherwise sit half-hidden under the player sprite).
+ */
+const AUTO_WALK_TIMEOUT = 2.5
+
+/**
+ * "Send Mail" tuning. Each click throws one burst of envelopes out of the
+ * post office chimney: they climb (slowing as they go), drift sideways, and
+ * wobble on a sine, so no two trace the same arc. Burst sizes are cycled
+ * rather than randomised — five to eight per the spec — and the whole batch
+ * is gone well inside the button's own 3s cooldown.
+ */
+const MAIL_BURST_SIZES = [6, 8, 5, 7] as const
+const MAIL_LIFE_SECONDS = 1.7
+/** Per-envelope life stagger, so a burst thins out rather than vanishing together. */
+const MAIL_LIFE_STAGGER = 0.06
+const MAIL_RISE_SPEED = 46
+const MAIL_RISE_STAGGER = 4
+/** Widest sideways lean of the fan, world px/sec at the outer edges. */
+const MAIL_DRIFT_SPREAD = 54
+const MAIL_SWAY_SPEED = 2.6
+const MAIL_SWAY_WIDTH = 26
+/** Reduced motion: a static cluster above the chimney instead of flight. */
+const MAIL_REDUCED_HOLD_SECONDS = 1.4
+const MAIL_REDUCED_CLUSTER_WIDTH = 30
+const MAIL_REDUCED_CLUSTER_LIFT = 12
 
 /** Gap between the door and the floating cue above it. */
 const CUE_LIFT = 30
@@ -137,6 +290,19 @@ export interface GameHandle {
   setTouchMove: (x: number, y: number) => void
   /** Fires the interact action, as if the player had pressed E. */
   triggerInteract: () => void
+  /**
+   * Contextual side-button actions — one per special location. Each is a
+   * tiny stub for now (Phase 8 adds the button and the plumbing to reach
+   * these; a later phase fills in the actual train/planting/feeding/mail
+   * animation behind each one). Naming them individually, rather than one
+   * `triggerContextualAction(id)`, is deliberate: it gives each future
+   * animation its own obvious place to grow into, and a caller can never
+   * pass a mismatched id.
+   */
+  triggerIncomingTrain: () => void
+  triggerPlantMore: () => void
+  triggerDropFeed: () => void
+  triggerSendMail: () => void
 }
 
 /**
@@ -148,6 +314,20 @@ export interface GameCallbacks {
   onPromptChange: (label: string | null) => void
   /** Player pressed the interact key on something with dialogue. */
   onOpenDialogue: (dialogue: Dialogue) => void
+  /**
+   * Id of the special location's contextual action currently in range, or
+   * null when the player isn't near one. Drives which single side button
+   * (Incoming Train / Plant More / Drop Feed / Send Mail) React shows.
+   */
+  onContextualActionChange: (action: ContextualActionId | null) => void
+  /**
+   * Fires with `true` the moment the greenhouse's fixed planting list is
+   * used up, then with `false` a few seconds later when the finished garden
+   * is cleared and the bed can be replanted. Drives the button's "The garden
+   * is full!" state, which is therefore a pause between rounds rather than a
+   * permanent end.
+   */
+  onGardenFullChange: (full: boolean) => void
   /**
    * Real asset-loading progress, 0..1, forwarded straight from Kaplay's own
    * loader. Fires every frame while assets are outstanding. This is a count
@@ -169,6 +349,11 @@ function buildingSpriteName(symbol: string): string {
   return `building-${symbol}`
 }
 
+/** Sprite name for a signpost, derived from its map symbol. */
+function signpostSpriteName(symbol: string): string {
+  return `signpost-${symbol}`
+}
+
 /**
  * Builds the map's visuals. Tiles carry no colliders — walls are enforced by
  * `canStandAt`, which reads the same ASCII map these rectangles are drawn from.
@@ -179,8 +364,9 @@ function buildLevel(k: KAPLAYCtx): void {
     tileHeight: TILE_SIZE,
     tiles: Object.fromEntries(
       Object.entries(TILES)
-        // Buildings are drawn as one sprite each, not as a block of tiles.
-        .filter(([symbol]) => !BUILDING_SYMBOLS.has(symbol))
+        // Buildings and signposts are drawn as their own sprite, not as a
+        // flat block of tile colour.
+        .filter(([symbol]) => !BUILDING_SYMBOLS.has(symbol) && !SIGNPOST_SYMBOLS.has(symbol))
         .map(([symbol, spec]) => [
           symbol,
           () => [k.rect(TILE_SIZE, TILE_SIZE), k.color(k.rgb(spec.color)), k.z(0)],
@@ -255,11 +441,14 @@ function buildBuildings(
 }
 
 /**
- * Registers one interactable per signpost. Signposts have no sprite of
- * their own — `buildLevel()` already draws them as a plain colored tile,
- * same as water or a tree — so this only needs to add the trigger.
+ * Places one themed sign sprite per signpost and registers its interactable.
+ *
+ * The sprite is anchored bottom-centre on the signpost's tile, like the
+ * interaction cue, so its post appears to be planted in the ground at that
+ * exact tile regardless of how tall the wrapped heading makes the board.
  */
 function buildSignposts(
+  k: KAPLAYCtx,
   registry: InteractionRegistry,
   openDialogue: (dialogue: Dialogue) => void,
 ): void {
@@ -267,17 +456,25 @@ function buildSignposts(
     const rect = findTileRect(signpost.symbol)
     if (!rect) continue
 
+    k.add([
+      k.sprite(signpostSpriteName(signpost.symbol)),
+      k.pos(rect.col * TILE_SIZE + TILE_SIZE / 2, rect.row * TILE_SIZE + TILE_SIZE),
+      k.anchor('bot'),
+      k.z(BUILDING_Z),
+      'signpost',
+    ])
+
     registry.register({
       id: `signpost:${signpost.symbol}`,
-      label: 'Signpost',
+      label: signpost.title,
       x: rect.col * TILE_SIZE + TILE_SIZE / 2,
       y: rect.row * TILE_SIZE + TILE_SIZE / 2,
       radius: SIGNPOST_INTERACT_RADIUS,
       onInteract: () =>
         openDialogue({
           id: `signpost-${signpost.symbol}`,
-          title: 'Signpost',
-          lines: [signpost.text],
+          title: signpost.title,
+          lines: signpost.lines,
         }),
     })
   }
@@ -305,6 +502,68 @@ function stepPlayer(player: GameObj, dirX: number, dirY: number, distance: numbe
       player.pos.y = nextY
     }
   }
+}
+
+/** A building's footprint in world pixels, for the camera zoom-in check. */
+interface WorldRect {
+  left: number
+  top: number
+  right: number
+  bottom: number
+}
+
+/** Shortest distance from a point to the outside of a rect; 0 if inside it. */
+function distanceToRect(x: number, y: number, rect: WorldRect): number {
+  const dx = Math.max(rect.left - x, 0, x - rect.right)
+  const dy = Math.max(rect.top - y, 0, y - rect.bottom)
+  return Math.hypot(dx, dy)
+}
+
+/** Every building's footprint, in world pixels, for the camera zoom-in check. */
+function collectBuildingRects(): WorldRect[] {
+  const rects: WorldRect[] = []
+  for (const location of LOCATIONS) {
+    const rect = findTileRect(location.symbol)
+    if (!rect) continue
+    rects.push({
+      left: rect.col * TILE_SIZE,
+      top: rect.row * TILE_SIZE,
+      right: (rect.col + rect.cols) * TILE_SIZE,
+      bottom: (rect.row + rect.rows) * TILE_SIZE,
+    })
+  }
+  return rects
+}
+
+/** One special location's footprint plus which contextual action it shows. */
+interface SpecialActionRect {
+  id: ContextualActionId
+  rect: WorldRect
+}
+
+/**
+ * The four locations with a contextual action button, with their footprints
+ * in world pixels. Built once at boot from whichever `LOCATIONS` entries set
+ * `contextualAction`, so adding or moving a special location is a
+ * `locations.ts`/`village.ts` edit only — nothing here hardcodes a symbol.
+ */
+function collectSpecialActionRects(): SpecialActionRect[] {
+  const rects: SpecialActionRect[] = []
+  for (const location of LOCATIONS) {
+    if (!location.contextualAction) continue
+    const rect = findTileRect(location.symbol)
+    if (!rect) continue
+    rects.push({
+      id: location.contextualAction,
+      rect: {
+        left: rect.col * TILE_SIZE,
+        top: rect.row * TILE_SIZE,
+        right: (rect.col + rect.cols) * TILE_SIZE,
+        bottom: (rect.row + rect.rows) * TILE_SIZE,
+      },
+    })
+  }
+  return rects
 }
 
 function buildPlayer(k: KAPLAYCtx): GameObj {
@@ -345,6 +604,7 @@ export function createGame(canvas: HTMLCanvasElement, callbacks: GameCallbacks):
    *  any way worth tearing the game down for. */
   const reducedMotion = prefersReducedMotion()
   const cameraFollow = reducedMotion ? CAMERA_FOLLOW_REDUCED : CAMERA_FOLLOW
+  const zoomFollow = reducedMotion ? CAMERA_ZOOM_FOLLOW_REDUCED : CAMERA_ZOOM_FOLLOW
 
   /** Live direction from the on-screen D-pad. Written by `setTouchMove`. */
   const touchMove = { x: 0, y: 0 }
@@ -354,6 +614,33 @@ export function createGame(canvas: HTMLCanvasElement, callbacks: GameCallbacks):
    * nothing to call, which is correct — there is no world to interact with.
    */
   let interactFn: (() => void) | null = null
+
+  /** Assigned inside `onLoad`, once the train station's world position is known. */
+  let triggerTrainFn: (() => void) | null = null
+
+  /** Assigned inside `onLoad`, once the player object exists. */
+  let triggerPlantMoreFn: (() => void) | null = null
+
+  /** Assigned inside `onLoad`, once the farm's world position is known. */
+  let triggerDropFeedFn: (() => void) | null = null
+
+  /** Assigned inside `onLoad`, once the post office's chimney position is known. */
+  let triggerSendMailFn: (() => void) | null = null
+  /** Destroys any envelopes still in flight. Used by `destroy()`. */
+  let clearMailFn: (() => void) | null = null
+
+  /** Envelopes fly over the rooftops, so they sit above buildings but under the cue. */
+  const MAIL_Z = PLAYER_Z + 1
+  /** Which burst size the next "Send Mail" click uses. See `MAIL_BURST_SIZES`. */
+  let mailBurst = 0
+
+  /**
+   * Set while the player is walking to a "Plant More" tile before its flower
+   * appears (see the "Plant More" section in `onLoad` below). `null` means
+   * normal keyboard/touch input drives the player.
+   */
+  let autoWalk: { targetX: number; targetY: number; elapsed: number; onArrive: () => void } | null =
+    null
 
   /**
    * While a dialogue is open the world freezes: no walking, no cue, no second
@@ -375,6 +662,14 @@ export function createGame(canvas: HTMLCanvasElement, callbacks: GameCallbacks):
     callbacks.onPromptChange(label)
   }
 
+  // Same debouncing as `setPrompt`, for the contextual action button.
+  let contextualAction: ContextualActionId | null = null
+  const setContextualAction = (action: ContextualActionId | null): void => {
+    if (action === contextualAction) return
+    contextualAction = action
+    callbacks.onContextualActionChange(action)
+  }
+
   k.loadSprite('player', createPlayerSpriteSheet(), {
     sliceX: FRAMES_PER_DIRECTION,
     sliceY: DIRECTIONS.length,
@@ -392,6 +687,10 @@ export function createGame(canvas: HTMLCanvasElement, callbacks: GameCallbacks):
   })
 
   k.loadSprite('cue', createCueSprite())
+  k.loadSprite('train', createTrainSprite())
+  k.loadSprite('rail', createRailSprite(WORLD_WIDTH))
+  k.loadSprite('feedPile', createFeedPileSprite())
+  k.loadSprite('envelope', createEnvelopeSprite())
 
   loadScenerySprites(k)
 
@@ -403,25 +702,47 @@ export function createGame(canvas: HTMLCanvasElement, callbacks: GameCallbacks):
   // Every building gets its own sprite, drawn to its exact footprint. Loaded
   // here rather than inside `onLoad` so they are decoded before anything is
   // added to the scene.
+  //
+  // Each location has its own themed facade (train station, schoolhouse,
+  // greenhouse, ...) with one coloured/iconed window per station, and the
+  // farm draws as a fenced plot area instead of a house. The window x
+  // positions come from the same `stationX()` formula `buildBuildings()`
+  // uses for the interaction triggers below, so the visible window and the
+  // spot the player must stand in are always the same point.
   for (const location of LOCATIONS) {
     const rect = findTileRect(location.symbol)
     if (!rect) continue
     const width = rect.cols * TILE_SIZE
     const height = rect.rows * TILE_SIZE
+    const windows = (location.stations ?? []).map((station) => ({
+      accent: station.accent,
+      icon: station.icon,
+      plaque: station.plaque,
+    }))
     const sprite =
-      location.variant === 'security'
-        ? createSecurityCenterSprite(width, height, location.palette)
-        : createBuildingSprite(width, height, location.palette)
+      location.variant === null
+        ? createFarmSprite(width, height, location.palette, location.signText, windows)
+        : createBuildingSprite(width, height, location.palette, location.variant, location.signText, windows)
     k.loadSprite(buildingSpriteName(location.symbol), sprite)
+  }
+
+  // One themed signpost sprite per location, sized to its wrapped heading.
+  for (const signpost of SIGNPOSTS) {
+    k.loadSprite(
+      signpostSpriteName(signpost.symbol),
+      createSignpostSprite(signpost.heading, signpost.accent, signpost.icon),
+    )
   }
 
   // Wait for the sprites to finish decoding before playing animations on them.
   k.onLoad(() => {
     buildLevel(k)
     buildBuildings(k, registry, openDialogue)
-    buildSignposts(registry, openDialogue)
+    buildSignposts(k, registry, openDialogue)
     const scenery = buildScenery(k, { reducedMotion })
     const player = buildPlayer(k)
+    const buildingRects = collectBuildingRects()
+    const specialActionRects = collectSpecialActionRects()
 
     const cue = k.add([
       k.sprite('cue'),
@@ -448,12 +769,409 @@ export function createGame(canvas: HTMLCanvasElement, callbacks: GameCallbacks):
 
     INTERACT_KEYS.forEach((key) => k.onKeyPress(key, interact))
 
+    // --- Incoming Train ----------------------------------------------------
+    // Looked up by `contextualAction` rather than hardcoding the 'R' symbol,
+    // so moving the station in `village.ts`/`locations.ts` needs no change
+    // here. `updateTrain` stays a no-op if the location is ever missing.
+    let updateTrain: (dt: number) => void = () => {}
+    {
+      const trainStationLocation = LOCATIONS.find(
+        (location) => location.contextualAction === 'incomingTrain',
+      )
+      const stationRect = trainStationLocation ? findTileRect(trainStationLocation.symbol) : null
+
+      if (stationRect) {
+        const stationCenterX = (stationRect.col + stationRect.cols / 2) * TILE_SIZE
+        const trackY = stationRect.row * TILE_SIZE - TRAIN_TRACK_OFFSET
+        const entryX = -TRAIN_WIDTH
+        const exitX = WORLD_WIDTH + TRAIN_WIDTH
+
+        // A permanent rail, visible whether or not a train is currently
+        // running, so "Incoming Train" has real track to arrive on instead
+        // of crossing bare grass. Spans the full world width to match the
+        // train's own entry-to-exit journey; `anchor('center')` matches the
+        // train's own anchor, so the two share the same vertical centre —
+        // "aligned with the track" is a shared `trackY`, not a coincidence.
+        k.add([
+          k.sprite('rail'),
+          k.pos(WORLD_WIDTH / 2, trackY),
+          k.anchor('center'),
+          k.z(BUILDING_Z),
+        ])
+
+        type TrainPhase = 'entering' | 'holding' | 'leaving' | 'reducedHold'
+        let train: { obj: GameObj; phase: TrainPhase; timer: number } | null = null
+
+        // Removes the temporary train object and clears the "active" state
+        // the stacking guard below checks — called both on natural
+        // completion and would be equally safe to call from anywhere else,
+        // since it's idempotent when `train` is already null.
+        const despawnTrain = (): void => {
+          train?.obj.destroy()
+          train = null
+        }
+
+        const spawnTrain = (): void => {
+          // A train is already on screen — ignore the request rather than
+          // stacking a second one. The contextual button's own ~10s cooldown
+          // (see `ContextualActionButton`) is the first line of defence;
+          // this is the belt-and-braces guard at the game layer itself.
+          if (train) return
+
+          const startX = reducedMotion ? stationCenterX : entryX
+          const obj = k.add([
+            k.sprite('train'),
+            k.pos(startX, trackY),
+            k.anchor('center'),
+            k.z(TRAIN_Z),
+            'train',
+          ])
+          // No k.area()/k.body() — a train with no collider physically
+          // cannot block the player, regardless of where it visually sits.
+          train = { obj, phase: reducedMotion ? 'reducedHold' : 'entering', timer: 0 }
+        }
+
+        updateTrain = (dt: number): void => {
+          if (!train) return
+
+          // Reduced motion: skip the cross-screen animation entirely — the
+          // train simply appears already stopped at the station, sits for a
+          // shorter beat, and is gone.
+          if (train.phase === 'reducedHold') {
+            train.timer += dt
+            if (train.timer >= TRAIN_REDUCED_HOLD_SECONDS) despawnTrain()
+            return
+          }
+
+          if (train.phase === 'entering') {
+            const dx = stationCenterX - train.obj.pos.x
+            const dist = Math.abs(dx)
+            // Eases from full cruise speed down to a minimum as it nears the
+            // station, rather than stopping abruptly.
+            const speedFactor = Math.max(TRAIN_MIN_SPEED_FACTOR, Math.min(1, dist / TRAIN_SLOW_RADIUS))
+            const step = Math.min(dist, TRAIN_CRUISE_SPEED * speedFactor * dt)
+            train.obj.pos.x += Math.sign(dx) * step
+            if (dist <= 1) {
+              train.obj.pos.x = stationCenterX
+              train.phase = 'holding'
+              train.timer = 0
+            }
+            return
+          }
+
+          if (train.phase === 'holding') {
+            train.timer += dt
+            if (train.timer >= TRAIN_HOLD_SECONDS) train.phase = 'leaving'
+            return
+          }
+
+          // 'leaving' — accelerates back up to cruise speed and continues in
+          // the same direction it arrived, off the opposite edge of the map.
+          const traveled = train.obj.pos.x - stationCenterX
+          const speedFactor = Math.max(TRAIN_MIN_SPEED_FACTOR, Math.min(1, traveled / TRAIN_SLOW_RADIUS))
+          train.obj.pos.x += TRAIN_CRUISE_SPEED * speedFactor * dt
+          if (train.obj.pos.x >= exitX) despawnTrain()
+        }
+
+        // Published so the contextual action button can fire this, the same
+        // way `interactFn` publishes the interact action above.
+        triggerTrainFn = spawnTrain
+      }
+    }
+
+    // --- Plant More ----------------------------------------------------
+    let updateGarden: (dt: number) => void = () => {}
+    {
+      // `true` once a tile has a cluster on it, so one click never plants a
+      // second cluster on the same tile. Reset as a set when the finished
+      // garden is cleared below.
+      const planted = PLANT_MORE_TILES.map(() => false)
+      /** Every flower currently in bloom, so the whole bed can be cleared at once. */
+      const flowers: GameObj[] = []
+      let plantedCount = 0
+      /** Seconds left of the "look at the full garden" beat, or null when not full. */
+      let gardenHold: number | null = null
+
+      // Clears the finished garden in one go and frees the bed for another
+      // fifteen. Flowers are destroyed together rather than each on its own
+      // timer, which is what makes the bed fill up visibly as you plant.
+      const clearGarden = (): void => {
+        for (const flower of flowers) flower.destroy()
+        flowers.length = 0
+        planted.fill(false)
+        plantedCount = 0
+        gardenHold = null
+        callbacks.onGardenFullChange(false)
+      }
+
+      updateGarden = (dt: number): void => {
+        if (gardenHold === null) return
+        gardenHold -= dt
+        if (gardenHold <= 0) clearGarden()
+      }
+
+      // Plants tile index `i`. Split out from `triggerPlantMoreFn` so it can
+      // run either immediately (reduced motion — see below) or once the
+      // player's walk to that tile finishes.
+      const plantAt = (i: number): void => {
+        const tile = PLANT_MORE_TILES[i]
+        const x = tile.col * TILE_SIZE + TILE_SIZE / 2
+        const y = tile.row * TILE_SIZE + TILE_SIZE / 2
+
+        planted[i] = true
+        plantedCount++
+        flowers.push(
+          k.add([
+            // Cycling variants deterministically (not `Math.random()`) keeps
+            // a reload-then-replant sequence identical, matching the rest
+            // of this village's "seeded, not random" decoration philosophy.
+            k.sprite(`flower-${i % FLOWER_VARIANTS}`),
+            k.pos(x, y),
+            k.anchor('center'),
+            k.z(FLOWER_Z),
+          ]),
+        )
+
+        // Bed full: hold the finished garden on screen for a beat, then
+        // clear the lot and let the visitor start over.
+        if (plantedCount >= PLANT_MORE_TILES.length) {
+          gardenHold = GARDEN_FULL_HOLD
+          callbacks.onGardenFullChange(true)
+        }
+      }
+
+      triggerPlantMoreFn = (): void => {
+        // The bed is full and about to be cleared — ignore clicks until it
+        // is. The button is already showing its "garden is full" state by
+        // then; this is the game-layer backstop.
+        if (gardenHold !== null) return
+        // A walk to a previous click's tile hasn't finished yet — ignore
+        // this click rather than queuing a second destination.
+        if (autoWalk) return
+
+        for (let i = 0; i < PLANT_MORE_TILES.length; i++) {
+          if (planted[i]) continue
+          const tile = PLANT_MORE_TILES[i]
+          const x = tile.col * TILE_SIZE + TILE_SIZE / 2
+          const y = tile.row * TILE_SIZE + TILE_SIZE / 2
+          // Never target a tile the player is already standing on.
+          if (Math.hypot(player.pos.x - x, player.pos.y - y) < PLANT_MORE_PLAYER_CLEARANCE) continue
+
+          if (reducedMotion) {
+            // No walking animation under reduced motion — plant immediately,
+            // exactly as before this phase.
+            plantAt(i)
+          } else {
+            // Walk to the tile first; the flower blooms once the player
+            // actually arrives, rather than appearing instantly wherever
+            // they happened to be standing.
+            autoWalk = { targetX: x, targetY: y, elapsed: 0, onArrive: () => plantAt(i) }
+          }
+          return
+        }
+        // Every remaining tile is currently blocked by the player — treat
+        // this click as a no-op rather than erroring or planting elsewhere.
+      }
+    }
+
+    // --- Drop Feed ----------------------------------------------------
+    // Looked up by `contextualAction`, the same pattern as the train station
+    // above — moving the farm in `village.ts`/`locations.ts` needs no change
+    // here.
+    let updateFeed: (dt: number) => void = () => {}
+    {
+      const farmLocation = LOCATIONS.find((location) => location.contextualAction === 'dropFeed')
+      const farmRect = farmLocation ? findTileRect(farmLocation.symbol) : null
+
+      if (farmRect) {
+        const left = farmRect.col * TILE_SIZE
+        const width = farmRect.cols * TILE_SIZE
+        // Off to one side of the farm's bottom edge, on the open street tile
+        // south of it — the farm's own tiles are solid, so the pile (and the
+        // chickens gathering around it) need to sit on ground they can
+        // actually stand on.
+        const pileX = left + width * 0.8
+        const pileY = (farmRect.row + farmRect.rows) * TILE_SIZE + TILE_SIZE / 2
+
+        let pile: GameObj | null = null
+        /** Seconds left before the pile is removed and the session ends. */
+        let feedTimer: number | null = null
+
+        const despawnPile = (): void => {
+          pile?.destroy()
+          pile = null
+          feedTimer = null
+        }
+
+        const spawnFeed = (): void => {
+          // A feeding session is already active — ignore the request rather
+          // than dropping a second pile. Belt-and-braces guard, same idea as
+          // the train's `if (train) return`; the contextual button's own 8s
+          // cooldown is the first line of defence.
+          if (pile) return
+
+          pile = k.add([k.sprite('feedPile'), k.pos(pileX, pileY), k.anchor('center'), k.z(FLOWER_Z)])
+          // The scenery knows how far each chicken has to run, so it owns the
+          // timing: the pile stays until the slowest one has finished its
+          // peck. (Chickens then walk home on their own; that needs no pile.)
+          feedTimer = scenery.feedChickens(pileX, pileY)
+        }
+
+        updateFeed = (dt: number): void => {
+          if (feedTimer === null) return
+          feedTimer -= dt
+          if (feedTimer <= 0) despawnPile()
+        }
+
+        // Published so the contextual action button can fire this, the same
+        // way `triggerTrainFn`/`triggerPlantMoreFn` do.
+        triggerDropFeedFn = spawnFeed
+      }
+    }
+
+    // --- Send Mail -----------------------------------------------------
+    // Looked up by `contextualAction` like the three interactions above, so
+    // moving the post office needs no change here. Purely decorative: this
+    // sends no email of any kind, it only throws pixel envelopes out of the
+    // chimney the facade actually draws.
+    let updateMail: (dt: number) => void = () => {}
+    {
+      const postOfficeLocation = LOCATIONS.find(
+        (location) => location.contextualAction === 'sendMail',
+      )
+      const postRect = postOfficeLocation ? findTileRect(postOfficeLocation.symbol) : null
+
+      if (postRect) {
+        const left = postRect.col * TILE_SIZE
+        const top = postRect.row * TILE_SIZE
+        const width = postRect.cols * TILE_SIZE
+        // Straight from the drawn flue — `postOfficeChimneyMouth()` is the
+        // same geometry the brickwork is painted from.
+        const mouth = postOfficeChimneyMouth(width)
+        const chimneyX = left + mouth.x
+        const chimneyY = top + mouth.y
+
+        interface Envelope {
+          obj: GameObj
+          /** Seconds this envelope has been in the air. */
+          age: number
+          /** Total seconds before it is removed. */
+          life: number
+          /** Sideways drift, world px/sec — negative blows left. */
+          driftX: number
+          /** Upward speed, world px/sec. */
+          riseY: number
+          /** Sine wobble that bends the climb into a curve. */
+          swayPhase: number
+          swaySpeed: number
+          swayWidth: number
+        }
+
+        const envelopes: Envelope[] = []
+
+        const clearEnvelopes = (): void => {
+          for (const envelope of envelopes) envelope.obj.destroy()
+          envelopes.length = 0
+        }
+
+        const spawnMail = (): void => {
+          // Envelopes are still in the air — ignore the click rather than
+          // adding a second batch. With the button's own 3s cooldown in
+          // front of it, this is what makes "repeated clicks cannot create
+          // unlimited envelopes" true at the game layer too.
+          if (envelopes.length > 0) return
+
+          // Five to eight per burst, varied per activation but cycled rather
+          // than randomised, matching the village's seeded-decoration habit.
+          const count = MAIL_BURST_SIZES[mailBurst % MAIL_BURST_SIZES.length]
+          mailBurst++
+
+          for (let i = 0; i < count; i++) {
+            // Fan the batch out: each envelope leans a little further from
+            // its neighbour and climbs at its own rate, so no two trace the
+            // same arc. Runs -0.5 (hard left) to +0.5 (hard right); every
+            // burst size is at least five, so this never divides by zero.
+            const spread = i / (count - 1) - 0.5
+            const obj = k.add([
+              k.sprite('envelope'),
+              k.pos(chimneyX, chimneyY),
+              k.anchor('center'),
+              k.z(MAIL_Z),
+              k.opacity(1),
+            ])
+
+            envelopes.push({
+              obj,
+              age: 0,
+              life: reducedMotion
+                ? MAIL_REDUCED_HOLD_SECONDS
+                : MAIL_LIFE_SECONDS + i * MAIL_LIFE_STAGGER,
+              driftX: spread * MAIL_DRIFT_SPREAD,
+              riseY: MAIL_RISE_SPEED + i * MAIL_RISE_STAGGER,
+              swayPhase: i * 1.1,
+              swaySpeed: MAIL_SWAY_SPEED + i * 0.35,
+              swayWidth: MAIL_SWAY_WIDTH,
+            })
+
+            // Reduced motion: no flight at all. The envelopes simply appear
+            // clustered just above the chimney, hold, and vanish.
+            if (reducedMotion) {
+              obj.pos.x = chimneyX + spread * MAIL_REDUCED_CLUSTER_WIDTH
+              obj.pos.y = chimneyY - MAIL_REDUCED_CLUSTER_LIFT - Math.abs(spread) * 4
+            }
+          }
+        }
+
+        updateMail = (dt: number): void => {
+          if (envelopes.length === 0) return
+
+          for (let i = envelopes.length - 1; i >= 0; i--) {
+            const envelope = envelopes[i]
+            envelope.age += dt
+            const progress = envelope.age / envelope.life
+
+            if (progress >= 1) {
+              envelope.obj.destroy()
+              envelopes.splice(i, 1)
+              continue
+            }
+
+            if (!reducedMotion) {
+              // Curved path: a steady climb that slows as it goes, a
+              // sideways drift, and a sine wobble laid over the top.
+              const climb = envelope.riseY * (1 - progress * 0.55) * dt
+              envelope.obj.pos.y -= climb
+              envelope.obj.pos.x +=
+                envelope.driftX * dt +
+                Math.cos(envelope.swayPhase + envelope.age * envelope.swaySpeed) *
+                  envelope.swayWidth *
+                  dt
+            }
+
+            // Fade out over the back half of the flight, so they thin into
+            // nothing instead of blinking off.
+            envelope.obj.opacity = progress < 0.5 ? 1 : 1 - (progress - 0.5) / 0.5
+          }
+        }
+
+        // Published for the contextual action button, same as the others.
+        triggerSendMailFn = spawnMail
+        // Destroying the game mid-flight must not leave objects behind;
+        // `k.quit()` tears the scene down anyway, but this keeps the local
+        // bookkeeping honest if the handle is reused.
+        clearMailFn = clearEnvelopes
+      }
+    }
+
     let facing: Direction = 'down'
     let playingAnim: string | null = null
     const camera = k.vec2(player.pos.x, player.pos.y)
     // Seed the camera before the first frame so nothing pops; the update loop
-    // re-resolves the zoom every frame from there.
-    k.setCamScale(zoomForWidth(canvas.clientWidth))
+    // re-resolves the zoom every frame from there. `currentZoom` is the
+    // smoothed value the update loop eases toward `targetZoom` — starting it
+    // at the real base zoom means the first frame never has to catch up.
+    let currentZoom = zoomForWidth(canvas.clientWidth)
+    k.setCamScale(currentZoom)
     k.setCamPos(camera)
 
     const stopWalking = (): void => {
@@ -468,39 +1186,71 @@ export function createGame(canvas: HTMLCanvasElement, callbacks: GameCallbacks):
         stopWalking()
         cue.opacity = 0
         setPrompt(null)
+        // Hides the contextual button while an overlay is open, same as the
+        // interaction prompt above.
+        setContextualAction(null)
       } else {
-        // --- input -----------------------------------------------------
-        const move = k.vec2(0, 0)
-        if (KEY_BINDINGS.left.some((key) => k.isKeyDown(key))) move.x -= 1
-        if (KEY_BINDINGS.right.some((key) => k.isKeyDown(key))) move.x += 1
-        if (KEY_BINDINGS.up.some((key) => k.isKeyDown(key))) move.y -= 1
-        if (KEY_BINDINGS.down.some((key) => k.isKeyDown(key))) move.y += 1
+        // --- input / auto-walk ------------------------------------------
+        if (autoWalk) {
+          // "Plant More" is walking the player to the flower's tile.
+          // Keyboard/touch input is ignored while this runs — it's a brief,
+          // deliberate walk, not something the player needs to steer.
+          autoWalk.elapsed += Math.min(k.dt(), MAX_FRAME_DELTA)
+          const dx = autoWalk.targetX - player.pos.x
+          const dy = autoWalk.targetY - player.pos.y
+          const dist = Math.hypot(dx, dy)
 
-        // The D-pad is summed in rather than checked as an either/or, so a
-        // tablet with a keyboard attached responds to both without one input
-        // source cancelling the other out.
-        move.x += touchMove.x
-        move.y += touchMove.y
+          if (dist <= PLANT_MORE_PLAYER_CLEARANCE || autoWalk.elapsed >= AUTO_WALK_TIMEOUT) {
+            stopWalking()
+            const onArrive = autoWalk.onArrive
+            autoWalk = null
+            onArrive()
+          } else {
+            const delta = Math.min(k.dt(), MAX_FRAME_DELTA)
+            stepPlayer(player, dx / dist, dy / dist, PLAYER_SPEED * delta)
 
-        if (move.x !== 0 || move.y !== 0) {
-          // Normalise so diagonals aren't ~41% faster than orthogonals.
-          const dir = move.unit()
-          const delta = Math.min(k.dt(), MAX_FRAME_DELTA)
-          stepPlayer(player, dir.x, dir.y, PLAYER_SPEED * delta)
+            if (Math.abs(dy) > Math.abs(dx)) facing = dy < 0 ? 'up' : 'down'
+            else facing = dx < 0 ? 'left' : 'right'
 
-          // Vertical input wins ties so the sprite doesn't flicker on diagonals.
-          if (move.y < 0) facing = 'up'
-          else if (move.y > 0) facing = 'down'
-          else if (move.x < 0) facing = 'left'
-          else facing = 'right'
-
-          const next = walkAnim(facing)
-          if (playingAnim !== next) {
-            player.play(next)
-            playingAnim = next
+            const next = walkAnim(facing)
+            if (playingAnim !== next) {
+              player.play(next)
+              playingAnim = next
+            }
           }
         } else {
-          stopWalking()
+          const move = k.vec2(0, 0)
+          if (KEY_BINDINGS.left.some((key) => k.isKeyDown(key))) move.x -= 1
+          if (KEY_BINDINGS.right.some((key) => k.isKeyDown(key))) move.x += 1
+          if (KEY_BINDINGS.up.some((key) => k.isKeyDown(key))) move.y -= 1
+          if (KEY_BINDINGS.down.some((key) => k.isKeyDown(key))) move.y += 1
+
+          // The D-pad is summed in rather than checked as an either/or, so a
+          // tablet with a keyboard attached responds to both without one
+          // input source cancelling the other out.
+          move.x += touchMove.x
+          move.y += touchMove.y
+
+          if (move.x !== 0 || move.y !== 0) {
+            // Normalise so diagonals aren't ~41% faster than orthogonals.
+            const dir = move.unit()
+            const delta = Math.min(k.dt(), MAX_FRAME_DELTA)
+            stepPlayer(player, dir.x, dir.y, PLAYER_SPEED * delta)
+
+            // Vertical input wins ties so the sprite doesn't flicker on diagonals.
+            if (move.y < 0) facing = 'up'
+            else if (move.y > 0) facing = 'down'
+            else if (move.x < 0) facing = 'left'
+            else facing = 'right'
+
+            const next = walkAnim(facing)
+            if (playingAnim !== next) {
+              player.play(next)
+              playingAnim = next
+            }
+          } else {
+            stopWalking()
+          }
         }
 
         // --- interaction cue -------------------------------------------
@@ -518,9 +1268,31 @@ export function createGame(canvas: HTMLCanvasElement, callbacks: GameCallbacks):
         }
         setPrompt(target ? target.label : null)
 
+        // --- contextual action button ------------------------------------
+        // Nearest-in-range special location, if any. Distance-based (not the
+        // interaction registry) so it shows well before the player is close
+        // enough to trigger a station, matching the camera zoom-in's feel.
+        let nearestSpecial: ContextualActionId | null = null
+        let nearestSpecialDistance = Infinity
+        for (const special of specialActionRects) {
+          const distance = distanceToRect(player.pos.x, player.pos.y, special.rect)
+          if (distance < nearestSpecialDistance) {
+            nearestSpecialDistance = distance
+            nearestSpecial = special.id
+          }
+        }
+        setContextualAction(nearestSpecialDistance <= SPECIAL_ACTION_RADIUS ? nearestSpecial : null)
+
         // Ambient life shares the player's freeze: a chicken strolling past a
-        // paused world would give away that the pause is only skin deep.
-        scenery.update(Math.min(k.dt(), MAX_FRAME_DELTA), k.time())
+        // paused world would give away that the pause is only skin deep. The
+        // train freezes the same way — it resumes exactly where it left off
+        // once the dialogue that paused it closes.
+        const frameDelta = Math.min(k.dt(), MAX_FRAME_DELTA)
+        scenery.update(frameDelta, k.time())
+        updateTrain(frameDelta)
+        updateFeed(frameDelta)
+        updateMail(frameDelta)
+        updateGarden(frameDelta)
       }
 
       // --- camera ------------------------------------------------------
@@ -532,17 +1304,32 @@ export function createGame(canvas: HTMLCanvasElement, callbacks: GameCallbacks):
       camera.x += (player.pos.x - camera.x) * t
       camera.y += (player.pos.y - camera.y) * t
 
-      // Zoom is resolved per frame from the live canvas width, which makes
-      // rotating a phone or dragging a window edge Just Work. `clientWidth`
-      // is read rather than `k.width()` because it is unambiguously CSS
-      // pixels — the number the breakpoint is expressed in — whereas the
-      // engine's own width can track the backing store instead.
-      const zoom = zoomForWidth(canvas.clientWidth)
-      k.setCamScale(zoom)
+      // Base zoom is resolved per frame from the live canvas width, which
+      // makes rotating a phone or dragging a window edge Just Work.
+      // `clientWidth` is read rather than `k.width()` because it is
+      // unambiguously CSS pixels — the number the breakpoint is expressed
+      // in — whereas the engine's own width can track the backing store
+      // instead.
+      const baseZoom = zoomForWidth(canvas.clientWidth)
+
+      // Zoom in a little whenever the player is near a building, and ease
+      // back out when they walk away. Distance (not the interaction
+      // registry) drives this, so it also responds while a station's own
+      // trigger radius hasn't been reached yet.
+      let nearestBuildingDistance = Infinity
+      for (const rect of buildingRects) {
+        const distance = distanceToRect(player.pos.x, player.pos.y, rect)
+        if (distance < nearestBuildingDistance) nearestBuildingDistance = distance
+      }
+      const targetZoom =
+        nearestBuildingDistance <= NEAR_BUILDING_RADIUS ? baseZoom * NEAR_BUILDING_ZOOM : baseZoom
+      const zoomT = 1 - Math.exp(-zoomFollow * k.dt())
+      currentZoom += (targetZoom - currentZoom) * zoomT
+      k.setCamScale(currentZoom)
 
       // Keep the view inside the map so the void never shows.
-      const halfWidth = k.width() / (2 * zoom)
-      const halfHeight = k.height() / (2 * zoom)
+      const halfWidth = k.width() / (2 * currentZoom)
+      const halfHeight = k.height() / (2 * currentZoom)
       k.setCamPos(
         clamp(camera.x, halfWidth, WORLD_WIDTH - halfWidth),
         clamp(camera.y, halfHeight, WORLD_HEIGHT - halfHeight),
@@ -566,7 +1353,28 @@ export function createGame(canvas: HTMLCanvasElement, callbacks: GameCallbacks):
     triggerInteract: () => {
       interactFn?.()
     },
+    // See the doc comment on `GameHandle` above: each is a separately-named
+    // action so a later phase's animation has an obvious place to live
+    // without touching the button plumbing (React-side cooldown, disabled
+    // state, hide-while-dialogue-open) Phase 8 already wires up around it.
+    // All four are real as of Phases 9 through 12.
+    triggerIncomingTrain: () => {
+      triggerTrainFn?.()
+    },
+    triggerPlantMore: () => {
+      triggerPlantMoreFn?.()
+    },
+    triggerDropFeed: () => {
+      triggerDropFeedFn?.()
+    },
+    triggerSendMail: () => {
+      triggerSendMailFn?.()
+    },
     destroy: () => {
+      // Envelopes are the one interaction whose objects can outlive a single
+      // frame with no world state anchoring them, so drop any still in
+      // flight before the context goes.
+      clearMailFn?.()
       k.quit()
       // `quit()` stops the loop but leaves Kaplay's module-level pointer to the
       // "current" context in place. Without clearing it, the next boot (e.g.

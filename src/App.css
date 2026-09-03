@@ -339,21 +339,86 @@
 }
 
 /* ------------------------------------------------------------------ */
-/* Dialogue box                                                        */
+/* Contextual action button                                           */
 /* ------------------------------------------------------------------ */
 
+/* The one button for whichever special location (train station, greenhouse,
+   farm, post office) the player is currently near. Desktop: centred on the
+   right edge of the viewport. `.contextual-action--touch` repositions it
+   above the whole D-pad/interact control stack instead — see that rule for
+   the clearance math. */
+.contextual-action {
+  position: absolute;
+  right: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 4;
+  margin: 0;
+  padding: 0.6rem 1rem;
+  max-width: 7.5rem;
+  background: rgba(16, 23, 31, 0.92);
+  border: 2px solid var(--accent);
+  border-radius: 6px;
+  color: var(--accent);
+  font-family: var(--font-pixel);
+  font-size: 0.7rem;
+  line-height: 1.4;
+  text-align: center;
+  cursor: pointer;
+}
+
+.contextual-action:disabled {
+  opacity: 0.45;
+  cursor: default;
+  border-color: var(--border);
+  color: var(--ink-dim);
+}
+
+.contextual-action:not(:disabled):hover,
+.contextual-action:not(:disabled):focus-visible {
+  background: var(--accent);
+  color: #0d1b0d;
+}
+
+/* `.touch-controls` occupies roughly the bottom 12rem of the viewport (1rem
+   padding + a 3-row D-pad + a bottom safe-area pad), and `.game-prompt` is
+   also bottom-anchored and can grow to several lines for a long station
+   name. Sitting in the upper-middle of the viewport instead of stacking
+   more bottom-anchored elements keeps this clear of both without having to
+   reason about either one's exact height. */
+.contextual-action--touch {
+  top: 38%;
+  right: 1rem;
+  transform: none;
+}
+
+/* ------------------------------------------------------------------ */
+/* Dialogue overlay                                                    */
+/* ------------------------------------------------------------------ */
+
+/* Sits over the game viewport (`.game-stage` is its positioned ancestor),
+   dimmed and lightly blurred so the village stays visible but the overlay
+   reads as the thing in front. */
 .dialogue-backdrop {
   position: absolute;
   inset: 0;
+  z-index: 40;
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: center;
   padding: 1rem;
-  background: rgba(8, 12, 17, 0.45);
+  background: rgba(8, 12, 17, 0.72);
+  backdrop-filter: blur(3px);
 }
 
+/* Sized against the backdrop (which itself fills the game viewport) rather
+   than the raw viewport, so it can never overflow past the top bar. Roughly
+   90–94% of the width and 86–92% of the height it sits in. */
 .dialogue {
-  width: min(720px, 100%);
+  width: 92%;
+  height: 89%;
+  display: flex;
+  flex-direction: column;
   background: var(--panel);
   color: var(--ink);
   /* Layered borders instead of rounded corners: reads as a pixel-art frame. */
@@ -361,84 +426,39 @@
   box-shadow:
     0 0 0 3px #0d141c,
     0 0 0 6px var(--accent);
-  padding: 1rem 1.15rem;
-  cursor: pointer;
+  overflow: hidden;
 }
 
+/* Never scrolls with the content below it — see `.dialogue-content`. */
 .dialogue-head {
+  flex: 0 0 auto;
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 1rem;
+  padding: 1rem 1.25rem;
   border-bottom: 2px solid var(--border);
-  padding-bottom: 0.5rem;
-  margin-bottom: 0.75rem;
+  background: var(--panel);
 }
 
 .dialogue-title {
   margin: 0;
   /* Pixel font: roughly twice the width per character of the body face, so
      the nominal size drops to keep long station titles on one or two lines. */
-  font-size: 0.75rem;
+  font-size: 0.85rem;
   letter-spacing: 0;
   text-transform: uppercase;
   color: var(--accent);
 }
 
-.dialogue-count {
-  font-size: 0.8rem;
-  color: var(--ink-dim);
-  font-variant-numeric: tabular-nums;
-}
-
-.dialogue-text {
-  margin: 0 0 0.9rem;
-  min-height: 4.5em;
-  line-height: 1.5;
-  font-size: 0.95rem;
-}
-
-/* Blinking block caret while the line is still typing. */
-.dialogue-caret {
-  display: inline-block;
-  width: 0.55em;
-  height: 1em;
-  margin-left: 0.1em;
-  vertical-align: text-bottom;
-  background: var(--accent);
-  animation: dialogue-caret-blink 0.8s steps(1, end) infinite;
-}
-
-@keyframes dialogue-caret-blink {
-  0%,
-  50% {
-    opacity: 1;
-  }
-  50.01%,
-  100% {
-    opacity: 0;
-  }
-}
-
-.dialogue-foot {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-}
-
-.dialogue-hint {
-  font-size: 0.8rem;
-  color: var(--ink-dim);
-}
-
 .dialogue-close {
+  flex: 0 0 auto;
   background: none;
   border: 2px solid var(--border);
   color: var(--ink-dim);
   font: inherit;
   font-size: 0.8rem;
-  padding: 0.25rem 0.7rem;
+  padding: 0.35rem 0.8rem;
   cursor: pointer;
 }
 
@@ -447,13 +467,35 @@
   border-color: var(--accent);
 }
 
-/* The screen shown after a dialogue's lines finish, in place of the
-   typewriter text. Same frame, different content: chips for stack/skills,
-   real link buttons, and — where a station points at another building's
-   content instead of repeating it — a cross-link button. */
+/* The only part of the overlay that scrolls. Everything the dialogue carries
+   — lines, every `DetailBlock`, and the closing card — renders here at once,
+   in document order, so reading it is just scrolling, not pressing a key
+   repeatedly. */
+.dialogue-content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 1.25rem;
+}
+
+.dialogue-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.dialogue-lines p {
+  margin: 0;
+  line-height: 1.6;
+  font-size: 1rem;
+}
+
+/* Tech chips, link buttons, and — where a station points at another
+   building's content instead of repeating it — a cross-link button. Shares
+   the same top-border separator as everything else in `.dialogue-content`
+   (see the shared `* + *` rule below), so it reads as just the last section
+   on the page rather than a distinct "screen". */
 .dialogue-card {
-  min-height: 4.5em;
-  margin: 0 0 0.9rem;
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
@@ -508,12 +550,6 @@
 .dialogue-card-crosslink:hover {
   border-color: var(--accent);
   color: var(--accent);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .dialogue-caret {
-    animation: none;
-  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -592,7 +628,7 @@
   font-size: 0.85rem;
 }
 
-:where(.landing-hint, .game-prompt, .dialogue-hint) kbd {
+:where(.landing-hint, .game-prompt) kbd {
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 4px;
@@ -822,26 +858,24 @@
     display: none;
   }
 
-  /* Sit the dialogue above the D-pad rather than on top of it. */
   .dialogue-backdrop {
-    padding: 0.75rem;
+    padding: 0.5rem;
   }
 
-  .dialogue {
-    padding: 0.85rem;
-    /* Never taller than the stage; long bullet lists scroll inside the frame
-       instead of pushing the footer buttons off-screen. */
-    max-height: calc(100dvh - 8rem);
-    overflow-y: auto;
+  .dialogue-head {
+    padding: 0.85rem 1rem;
   }
 
   .dialogue-title {
     font-size: 0.7rem;
   }
 
-  .dialogue-text {
-    font-size: 0.9rem;
-    min-height: 6em;
+  .dialogue-content {
+    padding: 1rem;
+  }
+
+  .dialogue-lines p {
+    font-size: 0.95rem;
   }
 
   .game-prompt {
@@ -987,6 +1021,57 @@
   border-top: 1px dashed var(--border);
   color: var(--ink-dim);
   font-size: 0.95rem;
+}
+
+.classic-todo {
+  color: var(--ink-dim);
+  font-size: 0.9rem;
+  font-style: italic;
+}
+
+/* Shared by `SuggestionForm` in both the classic Growth section and the
+   Growth Farm's in-village overlay — the theme tokens it uses (--panel,
+   --border, --accent, --ink-dim) are global, not classic-mode-scoped, so one
+   set of rules covers both. */
+.suggestion-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-width: 34rem;
+  margin-bottom: 1.5rem;
+}
+
+.suggestion-form label {
+  color: var(--ink-dim);
+  font-size: 0.9rem;
+}
+
+.suggestion-form textarea {
+  background: var(--panel);
+  border: 2px solid var(--border);
+  color: inherit;
+  font: inherit;
+  padding: 0.6rem 0.7rem;
+  resize: vertical;
+}
+
+.suggestion-form textarea:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.suggestion-form button {
+  align-self: flex-start;
+}
+
+.suggestion-form button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.suggestion-form-meta {
+  color: var(--ink-dim);
+  font-size: 0.9rem;
 }
 
 .classic-pager {
@@ -1299,7 +1384,8 @@
 /* ------------------------------------------------------------------ */
 
 /* `.detail-page` is the classic-mode `/projects/<id>` article; `DetailBlock`
-   markup is also rendered bare inside `.dialogue-blocks` (see below), so
+   markup is also rendered bare inside the village overlay's
+   `.dialogue-content` (see the shared `* + *` separator rule below), so
    every rule here is written to work in both places rather than assuming
    `.classic` ancestry. */
 
@@ -1361,10 +1447,13 @@
   color: var(--panel);
 }
 
-/* Separates one block from the next, but only when they're laid out as
-   siblings in the full page — inside the village dialogue, only one block is
-   ever mounted at a time, so this never fires there. */
-.detail-page > * + * {
+/* Separates one block from the next wherever `DetailBlock`s are laid out as
+   siblings: the full `/projects/<id>` page, and — now that the village
+   overlay renders every block at once instead of one at a time — the
+   overlay's own `.dialogue-content` (lines, each block, then the closing
+   card all count as top-level siblings there too). */
+.detail-page > * + *,
+.dialogue-content > * + * {
   margin-top: 2rem;
   padding-top: 1.5rem;
   border-top: 1px solid var(--border);
@@ -1581,21 +1670,6 @@
   padding: 0.2rem 0.6rem;
   font-size: 0.8rem;
   color: var(--ink-dim);
-}
-
-/* The scrollable body of the village dialogue's "blocks" phase — one
-   DetailBlock at a time, paged with the same Space/E/Enter that advances the
-   typewriter lines. Content can run much longer than a line of dialogue (a
-   video, a six-card grid, a full comparison table), so this — unlike
-   `.dialogue-text`/`.dialogue-card` — scrolls instead of assuming it fits. */
-.dialogue-blocks {
-  min-height: 4.5em;
-  max-height: min(60vh, 420px);
-  overflow-y: auto;
-  margin: 0 0 0.9rem;
-  /* Scrolling this shouldn't advance/close the dialogue the way clicking
-     empty space in it does; DialogueBox stops click propagation here. */
-  cursor: auto;
 }
 
 @media (max-width: 560px) {

@@ -35,16 +35,34 @@ function Heading({
 export function DetailBlockView({
   block,
   level,
+  videoAutoplay = false,
 }: {
   block: DetailBlock
   /** Heading level for this block's own `heading`/title text. */
   level: HeadingLevel
+  /**
+   * When true, a video block autoplays muted and loops. Used by the village
+   * overlay (`DialogueBox`), where opening the overlay is itself the
+   * visitor's request to see this content. Left off (the default) on the
+   * full `/projects/<id>` page, where arriving at the page should not start
+   * video playing unasked — that view keeps its existing controls-only,
+   * click-to-play behaviour.
+   */
+  videoAutoplay?: boolean
 }): JSX.Element {
   switch (block.kind) {
     case 'video':
       return (
         <figure className="detail-media">
-          <video controls muted playsInline preload="metadata" poster={block.poster}>
+          <video
+            autoPlay={videoAutoplay}
+            muted
+            playsInline
+            loop={videoAutoplay}
+            controls
+            preload="metadata"
+            poster={block.poster}
+          >
             <source src={block.src} type="video/mp4" />
           </video>
           <figcaption>{block.caption}</figcaption>

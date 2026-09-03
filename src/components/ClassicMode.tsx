@@ -1,12 +1,12 @@
-import { content, sections } from '../content/content'
+import { content } from '../content/content'
 import { Link } from '../router'
-import { sectionRoutes } from '../seo/routes'
 import {
   AboutSection,
   AchievementsSection,
   ContactSection,
   EducationSection,
   ExperienceSection,
+  GrowthSection,
   ProjectsSection,
   SecuritySection,
 } from './sections'
@@ -52,28 +52,20 @@ export default function ClassicMode() {
         </p>
       </header>
 
-      {/* Real <a href> values pointing at real prerendered routes. This is what
-          turns the site from one page into a connected graph a crawler can
-          walk, rather than a single document with in-page anchors. */}
-      <nav className="classic-nav" aria-label="Portfolio sections">
-        <ul>
-          {sectionRoutes.map((route) => {
-            const label = sections.find((section) => section.id === route.section)?.label
-            return (
-              <li key={route.id}>
-                <Link to={route.path}>{label ?? route.heading}</Link>
-              </li>
-            )
-          })}
-        </ul>
-      </nav>
-
+      {/* The single global nav (TopBar) already carries real <a href> links to
+          every primary route, so this page does not repeat that list —
+          repeating it here is what used to produce two navigation bars on
+          every classic page. Older sections that aren't in the primary nav
+          (education, security, achievements) stay reachable from here since
+          this page renders every section in one scroll, plus their own
+          in-page cross-links to one another. */}
       <AboutSection level={2} title="About" />
-      <ProjectsSection level={2} title="Projects" />
       <ExperienceSection level={2} title="Experience" />
+      <ProjectsSection level={2} title="Projects" />
       <EducationSection level={2} title="Education & skills" />
       <SecuritySection level={2} title="Security engineering" />
       <AchievementsSection level={2} title="Achievements & leadership" />
+      <GrowthSection level={2} title="Growth" />
       <ContactSection level={2} title="Contact" />
 
       <footer className="classic-footer">

@@ -2,7 +2,7 @@ import { useLayoutEffect, useRef, useState } from 'react'
 
 import { content, sections } from '../content/content'
 import { Link } from '../router'
-import { sectionRoutes } from '../seo/routes'
+import { primaryNavRoutes } from '../seo/routes'
 import AudioControl from './AudioControl'
 
 export type ViewMode = 'game' | 'classic'
@@ -76,7 +76,7 @@ export default function TopBar({ mode, onToggleMode, onOpenCredits }: TopBarProp
             ['--fade-right' as string]: canScrollRight ? `${FADE_WIDTH}px` : '0px',
           }}
         >
-          {sectionRoutes.map((route) => {
+          {primaryNavRoutes.map((route) => {
             const label = sections.find((section) => section.id === route.section)?.label
             return (
               <li key={route.id}>
@@ -86,18 +86,6 @@ export default function TopBar({ mode, onToggleMode, onOpenCredits }: TopBarProp
               </li>
             )
           })}
-          {content.person.resumes.map((resume) => (
-            <li key={resume.href}>
-              <a
-                className="topbar-link"
-                href={resume.href}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                {resume.label}
-              </a>
-            </li>
-          ))}
         </ul>
 
         <div className="topbar-actions">

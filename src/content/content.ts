@@ -97,6 +97,20 @@ export interface Project {
   /** Long-form write-up, ported from the old portfolio. Only set for
    *  projects that had a dedicated in-depth page there. */
   detail?: ProjectDetail
+  /**
+   * Which `villageLocations` entry this project's window/station lives in.
+   * Optional: a project reached only through another building's cross-link
+   * (e.g. the Kerala Association and Cyber Minds project write-ups, surfaced
+   * from their matching `experience` entry rather than getting a window of
+   * their own) has no location of its own.
+   */
+  locationId?: string
+  /**
+   * A visible placeholder for prose the project owner hasn't supplied yet
+   * (a final description, a demo video). Rendered alongside the rest of the
+   * entry so the gap is obvious rather than silently missing.
+   */
+  contentTodo?: string
 }
 
 /** One desk NPC inside the Town Hall. */
@@ -107,6 +121,10 @@ export interface ExperienceEntry {
   period: string
   location: string
   bullets: string[]
+  /** True for a role held today. Drives the Experience section's current/past split. */
+  current?: boolean
+  /** Which `villageLocations` entry this role's window lives in. */
+  locationId?: string
 }
 
 /** Library content. */
@@ -135,6 +153,32 @@ export interface Achievement {
   title: string
   detail: string
   period: string
+  /** Which `villageLocations` entry this achievement's window lives in, if any. */
+  locationId?: string
+}
+
+/** One growth plot in the Growth Farm — a plan for what's next, not a finished project. */
+export interface GrowthPlan {
+  id: string
+  title: string
+  paragraphs: string[]
+}
+
+/** The visitor suggestion box's mailto configuration. No server, no database. */
+export interface GrowthSuggestion {
+  toEmail: string
+  subject: string
+  maxLength: number
+  buttonLabel: string
+  placeholder: string
+}
+
+/** Growth Farm content. */
+export interface Growth {
+  headline: string
+  intro: string
+  plans: GrowthPlan[]
+  suggestion: GrowthSuggestion
 }
 
 /** Mailbox content. */
@@ -159,6 +203,7 @@ export interface PortfolioContent {
   education: Education
   security: SecurityProfile
   achievements: Achievement[]
+  growth: Growth
   contact: Contact
 }
 
@@ -182,6 +227,20 @@ const LOCATION = 'Seattle, Washington'
 const RESUMES: ContentLink[] = [
   { label: 'Software resume', href: '/resume-software.pdf' },
   { label: 'Security resume', href: '/resume-security.pdf' },
+]
+
+/**
+ * The Palana Security Engineer bullets, defined once and reused by both
+ * `content.security` (the Security Center / Security page) and the matching
+ * `content.experience` entry (the Current Roles train station) — so the two
+ * views can never drift apart the way two hand-typed copies would.
+ */
+const PALANA_BULLETS = [
+  'Conducted threat modeling across 10+ product surfaces using STRIDE methodology, cataloguing distinct threats and mapping trust boundaries across the mobile, backend, and Firebase architecture',
+  'Identified a confirmed privilege-escalation vulnerability in session/identity handling and drove remediation with the engineering team prior to deployment',
+  'Built security documentation and risk-mitigation control mappings covering 7+ categories of sensitive data (location, PII, auth, admin access), aligned to STRIDE and CIA triad frameworks',
+  'Evaluated and piloted 2 static analysis tools (Semgrep, npm audit) to replace CodeQL in the CI/CD pipeline after a private-repo migration broke existing scanning',
+  'Ran manual penetration testing with Burp Suite against API and WebSocket endpoints to assess authorization and data-exposure risk',
 ]
 
 /* ------------------------------------------------------------------ */
@@ -214,6 +273,7 @@ export const content: PortfolioContent = {
       'At Kerala Association of Washington, I migrated 2,800+ member records into a production WordPress system. I wrote custom PHP plugins for data imports, user management, and automated backups. The system runs live today.',
       'At Cyber Minds Nonprofit, I deployed a chatbot handling 100+ monthly user inquiries and led a 5-person team building a machine learning-powered cybersecurity course. At Apollo AI, I trained machine learning models for an educational platform supporting 50+ K-12 students.',
       "I've also spent two years teaching coding to 60+ elementary and middle school students. Teaching forces clarity. You learn what you truly understand when you explain binary search to a 10-year-old.",
+      `I'm based in ${LOCATION}. This village is a playful version of my portfolio, with each location representing a different part of my journey — from the roles I hold today to what I'm building next.`,
     ],
     quickFacts: [
       { label: 'Location', value: LOCATION },
@@ -258,6 +318,7 @@ export const content: PortfolioContent = {
         { label: 'View Code', href: 'https://github.com/TejaswiErattu/findar' },
         { label: 'Read the full write-up', href: '/projects/findar' },
       ],
+      locationId: 'mobile-innovation-observatory',
       detail: {
         badges: ['Built in 24 hours'],
         intro:
@@ -515,6 +576,30 @@ export const content: PortfolioContent = {
       learned:
         'Guardrails only work if they are faster than the unsafe path. Every gate had to justify the extra keystroke, which pushed me toward previewing intent rather than blocking actions outright.',
       links: [{ label: 'View Code', href: GITHUB }],
+      locationId: 'developer-tools-workshop',
+    },
+    {
+      id: 'cyber-study-tracker',
+      title: 'Cyber Study Tracker',
+      period: 'Jun 2025 – Sept 2025',
+      blurb:
+        'A client-side dashboard for tracking a self-directed cybersecurity study plan — a visual calendar, progress metrics, and a rollover engine that reflows missed tasks forward.',
+      tech: ['HTML', 'CSS', 'JavaScript', 'Firebase', 'Web Audio API', 'ExcelJS', 'FileSaver.js'],
+      built: [
+        'Built a fully client-side single-page dashboard (vanilla HTML, CSS, and JavaScript) with a visual calendar tracker, progress dashboard, and resource reference list',
+        'Designed a rollover scheduling engine that moves incomplete tasks forward and caps scheduled hours per day at a configurable daily maximum',
+        'Built a multi-sheet Excel/CSV export engine (ExcelJS, FileSaver.js, lazy-loaded from a CDN) covering the schedule, completed tasks, certifications, and settings',
+        'Added a toggle to include or exclude a weekly project block, which reflows the schedule when switched off',
+        'Used the Web Audio API to play small retro synth sound effects for clicks, success, warning, and reset events',
+      ],
+      impact:
+        'A personal tool for tracking and adapting a self-directed study plan across certifications and coursework.',
+      learned:
+        'Built to track and reschedule a personal cybersecurity study plan — including Security+, AWS, PortSwigger, and coding practice — without a backend beyond Firebase sync.',
+      links: [],
+      locationId: 'developer-tools-workshop',
+      contentTodo:
+        'TODO: replace with the final project description and demo video once provided.',
     },
     {
       id: 'unearthed',
@@ -538,6 +623,7 @@ export const content: PortfolioContent = {
         { label: 'Live Demo', href: 'https://unearthedfllwebsite27820.vercel.app' },
         { label: 'Read the full write-up', href: '/projects/unearthed' },
       ],
+      locationId: 'community-impact-greenhouse',
       detail: {
         eyebrow: 'FIRST LEGO League',
         intro:
@@ -762,6 +848,7 @@ export const content: PortfolioContent = {
         { label: 'Live Demo', href: 'https://terralend-tejaswi.vercel.app/' },
         { label: 'Read the full write-up', href: '/projects/terralend' },
       ],
+      locationId: 'community-impact-greenhouse',
       detail: {
         eyebrow: 'Climate-Aware FinTech',
         intro:
@@ -907,6 +994,32 @@ export const content: PortfolioContent = {
           },
         ],
       },
+    },
+    {
+      id: 'winfo-website',
+      title: 'WINFO Website',
+      period: '',
+      blurb:
+        'The official website for Women in Informatics (WINFO) at the University of Washington, built from scratch with React, Vite, and React Router.',
+      tech: ['React 19', 'Vite', 'React Router DOM', 'CSS Custom Properties'],
+      built: [
+        'Built the site from scratch with React 19 and Vite, using React Router DOM for client-side routing across 7 pages (Home, Hackathon, Events, Podcast, Officers, Membership, Support)',
+        'Set up a design token system in CSS custom properties for a consistent colour palette and typography (Poppins, Inter, Caveat, Space Mono via Google Fonts)',
+        'Kept page content in dedicated data files, separate from the page components, so copy and event info can be updated without touching JSX',
+      ],
+      impact:
+        'The live website for the University of Washington Women in Informatics organization.',
+      learned:
+        'Built and designed the WINFO website from page structure and routing down to the design tokens and typography system.',
+      links: [
+        {
+          label: 'Live Site',
+          href: 'https://winfo-website-version1-nukxw8nb9-tejaswi-erattus-projects.vercel.app/',
+        },
+      ],
+      locationId: 'community-impact-greenhouse',
+      contentTodo:
+        'TODO: replace with the final project description and demo video once provided.',
     },
     {
       id: 'kaw',
@@ -1208,6 +1321,7 @@ update_user_meta($user_id, 'default_password_nag', true);`,
         { label: 'View Code', href: 'https://github.com/TejaswiErattu/bump' },
         { label: 'Read the full write-up', href: '/projects/bump' },
       ],
+      locationId: 'mobile-innovation-observatory',
       detail: {
         eyebrow: 'Native iOS App',
         intro:
@@ -1349,6 +1463,16 @@ update_user_meta($user_id, 'default_password_nag', true);`,
 
   experience: [
     {
+      id: 'palana',
+      role: 'Security Engineer',
+      company: 'Palana',
+      period: 'June 2026 – Present',
+      location: 'Seattle, WA',
+      bullets: PALANA_BULLETS,
+      current: true,
+      locationId: 'current-roles-station',
+    },
+    {
       id: 'ahf',
       role: 'Software Engineering Lead',
       company: 'Accountability & Hopeful Fridays',
@@ -1361,6 +1485,24 @@ update_user_meta($user_id, 'default_password_nag', true);`,
         'Audited and documented 5+ GoHighLevel automation workflows and created safe test protocols to prevent disruption to live member communications',
         'Consolidated 40+ cross-team tasks into a centralized tracking system, reducing coordination overhead across technical and non-technical contributors',
       ],
+      current: true,
+      locationId: 'current-roles-station',
+    },
+    {
+      id: 'winfo',
+      role: 'Finance Director',
+      company: 'Women in Informatics (WINFO)',
+      period: 'Current position',
+      location: 'Seattle, WA',
+      bullets: [
+        'Serves as Finance Director for Women in Informatics at the University of Washington',
+        'Manages organizational budgets and financial tracking, including member reimbursements',
+        'Supports sponsorship coordination and helps find sponsors for club initiatives',
+        'Helps prepare funding and grant materials',
+        "Tracks finances for club events and initiatives, including WINFO's hackathon",
+      ],
+      current: true,
+      locationId: 'current-roles-station',
     },
     {
       id: 'kaw',
@@ -1373,6 +1515,7 @@ update_user_meta($user_id, 'default_password_nag', true);`,
         'Built custom WordPress plugins (PHP, MySQL, JavaScript/AJAX) for real-time member management and automated daily backups via WP-Cron',
         'Automated report generation with exportable data fields (PHP, SQL), cutting monthly turnaround from hours to minutes',
       ],
+      locationId: 'engineering-workshop',
     },
     {
       id: 'icode',
@@ -1384,6 +1527,7 @@ update_user_meta($user_id, 'default_password_nag', true);`,
         'Taught coding to 60+ elementary and middle school students using Minecraft Education, Roblox Lua, and Python',
         'Led 4 robotics and Minecraft camps mentoring teams of 8–12 students through hands-on STEM challenges',
       ],
+      locationId: 'ai-teaching-schoolhouse',
     },
     {
       id: 'apollo',
@@ -1395,6 +1539,7 @@ update_user_meta($user_id, 'default_password_nag', true);`,
         "Trained and evaluated 5 classification/regression models (TensorFlow, scikit-learn) for Saturn AI's grading engine, improving accuracy by 40% for 50+ K-12 students",
         'Optimized model performance through hyperparameter tuning, cutting average response time from 8s to 3s',
       ],
+      locationId: 'ai-teaching-schoolhouse',
     },
     {
       id: 'ilink',
@@ -1406,6 +1551,7 @@ update_user_meta($user_id, 'default_password_nag', true);`,
         'Collaborated across 3 client teams to test 20+ AI automation tools (Zapier, UiPath) and build Power BI dashboards, informing delivery decisions for live projects',
         'Coordinated with engineers, PMs, and C-suite stakeholders through 20+ Agile ceremonies (Jira, Microsoft Teams), aligning cross-functional priorities across 3 client engagements',
       ],
+      locationId: 'engineering-workshop',
     },
     {
       id: 'cyber-minds',
@@ -1418,6 +1564,7 @@ update_user_meta($user_id, 'default_password_nag', true);`,
         'Led a 5-person team using Agile sprints (GitHub Projects) to integrate a TensorFlow-based ML model into production 2 weeks ahead of schedule',
         'Trained a scikit-learn classification model on student interaction data to personalize an 8-module cybersecurity curriculum, boosting engagement scores by 35%',
       ],
+      locationId: 'ai-teaching-schoolhouse',
     },
     {
       id: 'goezz',
@@ -1428,6 +1575,7 @@ update_user_meta($user_id, 'default_password_nag', true);`,
       bullets: [
         'Built 5 responsive webpages (React, JavaScript, Webpack) improving site load time 30% and user engagement 25%',
       ],
+      locationId: 'engineering-workshop',
     },
   ],
 
@@ -1495,13 +1643,7 @@ update_user_meta($user_id, 'default_password_nag', true);`,
     role: 'Security Engineer',
     organization: 'Palana',
     period: 'June 2026 – Present',
-    bullets: [
-      'Conducted threat modeling across 10+ product surfaces using STRIDE methodology, cataloguing distinct threats and mapping trust boundaries across the mobile, backend, and Firebase architecture',
-      'Identified a confirmed privilege-escalation vulnerability in session/identity handling and drove remediation with the engineering team prior to deployment',
-      'Built security documentation and risk-mitigation control mappings covering 7+ categories of sensitive data (location, PII, auth, admin access), aligned to STRIDE and CIA triad frameworks',
-      'Evaluated and piloted 2 static analysis tools (Semgrep, npm audit) to replace CodeQL in the CI/CD pipeline after a private-repo migration broke existing scanning',
-      'Ran manual penetration testing with Burp Suite against API and WebSocket endpoints to assess authorization and data-exposure risk',
-    ],
+    bullets: PALANA_BULLETS,
     skills: [
       'Threat Modeling (STRIDE)',
       'Vulnerability Assessment',
@@ -1554,6 +1696,7 @@ update_user_meta($user_id, 'default_password_nag', true);`,
       title: 'Martial Arts Head Instructor',
       detail: 'Head instructor role held for three years.',
       period: '3 years – 2024',
+      locationId: 'ai-teaching-schoolhouse',
     },
     {
       id: 'coding-instructor',
@@ -1562,6 +1705,45 @@ update_user_meta($user_id, 'default_password_nag', true);`,
       period: '3 years – 2025',
     },
   ],
+
+  growth: {
+    headline: "What I'm Growing Next",
+    intro:
+      "A few things I'm working toward next — places to experiment, build, and keep improving what I've already shipped.",
+    plans: [
+      {
+        id: 'hackathons',
+        title: 'Hackathons',
+        paragraphs: [
+          'I enjoy attending hackathons and plan to attend more later in the year.',
+          'They are a place to experiment, collaborate, and build quickly.',
+        ],
+      },
+      {
+        id: 'home-lab',
+        title: 'Home Lab',
+        paragraphs: [
+          'I plan to build my own home lab later this year.',
+          'It will be a way to practice networking, security, cloud infrastructure, and system administration.',
+        ],
+      },
+      {
+        id: 'github-extension',
+        title: 'GitHub Extension',
+        paragraphs: [
+          'I plan to continue developing the GitHub Extension.',
+          'Future work includes improving its safety checks, Git workflows, and usefulness for student teams.',
+        ],
+      },
+    ],
+    suggestion: {
+      toEmail: EMAIL,
+      subject: 'Portfolio Growth Idea',
+      maxLength: 1000,
+      buttonLabel: 'Send Suggestion',
+      placeholder: 'Suggest a project, skill, or experiment I should try next…',
+    },
+  },
 
   contact: {
     email: EMAIL,
@@ -1583,17 +1765,260 @@ update_user_meta($user_id, 'default_password_nag', true);`,
   },
 }
 
+/* ------------------------------------------------------------------ */
+/* Village location content                                           */
+/* ------------------------------------------------------------------ */
+
+/** One window, station, or plot shown in a location's signpost overlay. */
+export interface VillageWindow {
+  id: string
+  label: string
+  description: string
+}
+
+/**
+ * One of the nine village locations: the facade sign text, the signpost's
+ * heading + one-liner, and the list of windows/stations/plots it contains.
+ * This is pure display metadata — the actual prose for each window still
+ * lives in `content.experience`, `content.projects`, `content.achievements`,
+ * `content.about`, `content.growth`, or `content.contact`. `locations.ts`
+ * (the game layer) reads this to build signposts; it is not read there yet.
+ */
+export interface VillageLocation {
+  id: string
+  name: string
+  signHeading: string
+  signDescription: string
+  windows: VillageWindow[]
+}
+
+export const villageLocations: VillageLocation[] = [
+  {
+    id: 'about-cottage',
+    name: 'About Me Flower Cottage',
+    signHeading: 'ABOUT ME',
+    signDescription: 'A little about who I am and what I am looking for.',
+    windows: [
+      {
+        id: 'introduction',
+        label: 'Introduction',
+        description: 'A short introduction to who I am.',
+      },
+      {
+        id: 'uw-education',
+        label: 'UW and Education',
+        description: 'My degree, focus area, and university.',
+      },
+      {
+        id: 'looking-for',
+        label: "What I'm Looking For",
+        description: 'The kinds of roles I am seeking.',
+      },
+    ],
+  },
+  {
+    id: 'current-roles-station',
+    name: 'Current Roles Train Station',
+    signHeading: 'CURRENT ROLES',
+    signDescription: 'See the roles I hold today and the work I am currently helping lead.',
+    windows: [
+      {
+        id: 'palana',
+        label: 'Palana',
+        description: 'Security Engineer — threat modeling and penetration testing.',
+      },
+      {
+        id: 'ahf',
+        label: 'Accountability & Hopeful Fridays',
+        description: 'Software Engineering Lead — infrastructure and CI/CD planning.',
+      },
+      {
+        id: 'winfo',
+        label: 'Women in Informatics',
+        description: 'Finance Director — budgets, reimbursements, and sponsorships.',
+      },
+    ],
+  },
+  {
+    id: 'engineering-workshop',
+    name: 'Engineering Workshop',
+    signHeading: 'ENGINEERING EXPERIENCE',
+    signDescription: 'Past engineering roles where I shipped production code.',
+    windows: [
+      {
+        id: 'kaw',
+        label: 'Kerala Association of Washington',
+        description: 'Developer Intern — WordPress membership migration platform.',
+      },
+      {
+        id: 'ilink',
+        label: 'iLink Digital',
+        description: 'PM Intern — AI automation tooling and dashboards.',
+      },
+      {
+        id: 'goezz',
+        label: 'GoEzz',
+        description: 'Frontend Developer — responsive web pages.',
+      },
+    ],
+  },
+  {
+    id: 'ai-teaching-schoolhouse',
+    name: 'AI & Teaching Schoolhouse',
+    signHeading: 'AI & TEACHING',
+    signDescription: 'Roles training machine learning models and teaching others to code.',
+    windows: [
+      {
+        id: 'apollo',
+        label: 'Apollo AI',
+        description: 'AI Trainer and Tester — model training and evaluation.',
+      },
+      {
+        id: 'cyber-minds',
+        label: 'Cyber Minds',
+        description: 'Machine Learning Manager — chatbot and curriculum ML.',
+      },
+      {
+        id: 'icode',
+        label: 'iCode',
+        description: 'Instructor — teaching coding to elementary and middle school students.',
+      },
+      {
+        id: 'martial-arts',
+        label: 'Martial Arts Leadership',
+        description: 'Head instructor role held for three years.',
+      },
+    ],
+  },
+  {
+    id: 'mobile-innovation-observatory',
+    name: 'Mobile Innovation Observatory',
+    signHeading: 'MOBILE INNOVATION',
+    signDescription: 'Native iOS apps exploring location, sensing, and spontaneous connection.',
+    windows: [
+      { id: 'findar', label: 'Findar', description: 'AR object finder using LiDAR and YOLOv8.' },
+      { id: 'bump', label: 'Bump', description: 'Proximity-based social meetup app.' },
+    ],
+  },
+  {
+    id: 'developer-tools-workshop',
+    name: 'Developer Tools Cyber Workshop',
+    signHeading: 'DEVELOPER TOOLS',
+    signDescription: 'Tools that make development safer and more organized.',
+    windows: [
+      {
+        id: 'github-extension',
+        label: 'GitHub Extension',
+        description: 'VS Code extension for safer Git workflows.',
+      },
+      {
+        id: 'cyber-study-tracker',
+        label: 'Cyber Study Tracker',
+        description: 'Personal cybersecurity study plan dashboard.',
+      },
+    ],
+  },
+  {
+    id: 'community-impact-greenhouse',
+    name: 'Community Impact Greenhouse',
+    signHeading: 'COMMUNITY IMPACT',
+    signDescription: 'Projects built for teams, organizations, and communities.',
+    windows: [
+      {
+        id: 'terralend',
+        label: 'TerraLend',
+        description: 'Climate-aware agricultural lending engine.',
+      },
+      {
+        id: 'unearthed',
+        label: 'Unearthed Dinos',
+        description: 'FIRST LEGO League team website.',
+      },
+      {
+        id: 'winfo-website',
+        label: 'WINFO Website',
+        description: 'Official Women in Informatics website.',
+      },
+    ],
+  },
+  {
+    id: 'contact-post-office',
+    name: 'Contact Post Office',
+    signHeading: 'CONTACT',
+    signDescription: 'Ways to reach me.',
+    windows: [
+      { id: 'email', label: 'Email', description: 'Send me an email directly.' },
+      { id: 'linkedin', label: 'LinkedIn', description: 'Connect with me on LinkedIn.' },
+      { id: 'github', label: 'GitHub', description: 'See my code on GitHub.' },
+    ],
+  },
+  {
+    id: 'growth-farm',
+    name: 'Growth Farm',
+    signHeading: "WHAT I'M GROWING NEXT",
+    signDescription: "What I'm working toward next.",
+    windows: [
+      { id: 'hackathons', label: 'Hackathons', description: 'Plans to attend more hackathons.' },
+      {
+        id: 'home-lab',
+        label: 'Home Lab',
+        description: 'Plans to build a home lab for networking and security practice.',
+      },
+      {
+        id: 'github-extension',
+        label: 'GitHub Extension',
+        description: 'Plans to keep developing the GitHub Extension.',
+      },
+      {
+        id: 'suggestion',
+        label: 'Suggest Something',
+        description: 'Send a project, skill, or experiment idea by email.',
+      },
+    ],
+  },
+]
+
+/** Looks up one village location by id. Throws so a typo fails loudly rather than rendering nothing. */
+export function getVillageLocation(id: string): VillageLocation {
+  const location = villageLocations.find((entry) => entry.id === id)
+  if (!location) throw new Error(`Unknown village location id: ${id}`)
+  return location
+}
+
+/** Every `content.experience` entry assigned to a given village location, in source order. */
+export function experienceForLocation(locationId: string): ExperienceEntry[] {
+  return content.experience.filter((entry) => entry.locationId === locationId)
+}
+
+/** Every `content.projects` entry assigned to a given village location, in source order. */
+export function projectsForLocation(locationId: string): Project[] {
+  return content.projects.filter((entry) => entry.locationId === locationId)
+}
+
+/**
+ * Labels for the small contextual action button shown near a special
+ * location (train station, greenhouse, farm, post office). Plain data only —
+ * no interaction is wired up to these yet.
+ */
+export const contextualActions = {
+  incomingTrain: 'Incoming Train',
+  plantMore: 'Plant More',
+  dropFeed: 'Drop Feed',
+  sendMail: 'Send Mail',
+} as const
+
 /**
  * Navigation sections shared by the top bar, the classic-mode page, and
  * (later) the building interactions. One list, one set of anchor ids.
  */
 export const sections = [
   { id: 'about', label: 'About' },
-  { id: 'projects', label: 'Projects' },
   { id: 'experience', label: 'Experience' },
+  { id: 'projects', label: 'Projects' },
   { id: 'education', label: 'Education' },
   { id: 'security', label: 'Security' },
   { id: 'achievements', label: 'Achievements' },
+  { id: 'growth', label: 'Growth' },
   { id: 'contact', label: 'Contact' },
 ] as const
 

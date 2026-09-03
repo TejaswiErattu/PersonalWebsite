@@ -2,6 +2,7 @@ import type { JSX } from 'react'
 
 import { content, type SectionId } from '../content/content'
 import { Link } from '../router'
+import { SuggestionForm } from './SuggestionForm'
 
 /**
  * The classic-mode content, one component per section.
@@ -43,7 +44,7 @@ function childLevels(level: Level): [Level, Level] {
 }
 
 export function AboutSection({ level, title }: SectionProps) {
-  const { about, person } = content
+  const { about, person, education } = content
   const [sub] = childLevels(level)
 
   return (
@@ -93,9 +94,31 @@ export function AboutSection({ level, title }: SectionProps) {
         ))}
       </dl>
 
+      <Heading level={sub}>Education</Heading>
+      <p>{education.degree}</p>
+      <dl className="classic-facts">
+        <div>
+          <dt>School</dt>
+          <dd>{education.school}</dd>
+        </div>
+        <div>
+          <dt>Focus area</dt>
+          <dd>{education.focusArea}</dd>
+        </div>
+        <div>
+          <dt>Expected graduation</dt>
+          <dd>{education.expectedGraduation}</dd>
+        </div>
+        <div>
+          <dt>GPA</dt>
+          <dd>{education.gpa}</dd>
+        </div>
+      </dl>
+
       <p className="classic-crosslink">
-        More on the coursework behind this in <Link to="/education">education &amp; skills</Link>,
-        or see it applied in <Link to="/projects">projects</Link>.
+        The full technical skills breakdown lives in{' '}
+        <Link to="/education">education &amp; skills</Link>, and it's applied in{' '}
+        <Link to="/projects">projects</Link>.
       </p>
     </section>
   )
@@ -130,6 +153,7 @@ export function ProjectsSection({ level, title }: SectionProps) {
           <p>
             <strong>What I learned:</strong> {project.learned}
           </p>
+          {project.contentTodo && <p className="classic-todo">{project.contentTodo}</p>}
           <ul className="classic-links">
             {project.links.map((link) => (
               <li key={link.href + link.label}>
@@ -158,28 +182,44 @@ export function ProjectsSection({ level, title }: SectionProps) {
   )
 }
 
+function ExperienceCard({ job, sub }: { job: (typeof content.experience)[number]; sub: Level }) {
+  return (
+    <article className="classic-card">
+      <Heading level={sub}>
+        {job.role} — {job.company}
+      </Heading>
+      <p className="classic-meta">
+        {job.period} · {job.location}
+      </p>
+      <ul>
+        {job.bullets.map((bullet) => (
+          <li key={bullet}>{bullet}</li>
+        ))}
+      </ul>
+    </article>
+  )
+}
+
 export function ExperienceSection({ level, title }: SectionProps) {
   const { experience } = content
-  const [sub] = childLevels(level)
+  const [sub, subSub] = childLevels(level)
+  const current = experience.filter((job) => job.current)
+  const past = experience.filter((job) => !job.current)
 
   return (
     <section id="experience" className="classic-section">
       <Heading level={level}>{title}</Heading>
-      {experience.map((job) => (
-        <article key={job.id} className="classic-card">
-          <Heading level={sub}>
-            {job.role} — {job.company}
-          </Heading>
-          <p className="classic-meta">
-            {job.period} · {job.location}
-          </p>
-          <ul>
-            {job.bullets.map((bullet) => (
-              <li key={bullet}>{bullet}</li>
-            ))}
-          </ul>
-        </article>
+
+      <Heading level={sub}>Current roles</Heading>
+      {current.map((job) => (
+        <ExperienceCard key={job.id} job={job} sub={subSub} />
       ))}
+
+      <Heading level={sub}>Past positions</Heading>
+      {past.map((job) => (
+        <ExperienceCard key={job.id} job={job} sub={subSub} />
+      ))}
+
       <p className="classic-crosslink">
         See the shipped results in <Link to="/projects">projects</Link>, or the recognition in{' '}
         <Link to="/achievements">achievements &amp; leadership</Link>.
@@ -286,6 +326,42 @@ export function AchievementsSection({ level, title }: SectionProps) {
   )
 }
 
+/**
+ * The Growth Farm's plots plus its visitor suggestion box.
+ *
+ * The suggestion box itself is `SuggestionForm`, shared with the in-village
+ * overlay opened from the farm's "Suggest Something" plot — one component,
+ * one `content.growth.suggestion` config, so the two views can never
+ * disagree about the mailto address, subject, or character limit.
+ */
+export function GrowthSection({ level, title }: SectionProps) {
+  const { growth } = content
+  const [sub] = childLevels(level)
+
+  return (
+    <section id="growth" className="classic-section">
+      <Heading level={level}>{title}</Heading>
+      <p>{growth.intro}</p>
+
+      {growth.plans.map((plan) => (
+        <article key={plan.id} className="classic-card">
+          <Heading level={sub}>{plan.title}</Heading>
+          {plan.paragraphs.map((paragraph) => (
+            <p key={paragraph}>{paragraph}</p>
+          ))}
+        </article>
+      ))}
+
+      <Heading level={sub}>Suggest something</Heading>
+      <SuggestionForm />
+
+      <p className="classic-crosslink">
+        Curious what's already shipped? See <Link to="/projects">projects</Link>.
+      </p>
+    </section>
+  )
+}
+
 export function ContactSection({ level, title }: SectionProps) {
   const { contact, person } = content
 
@@ -312,13 +388,6 @@ export function ContactSection({ level, title }: SectionProps) {
             {contact.github}
           </a>
         </li>
-        {contact.resumes.map((resume) => (
-          <li key={resume.href}>
-            <a href={resume.href} target="_blank" rel="noopener noreferrer">
-              {resume.label} (PDF)
-            </a>
-          </li>
-        ))}
       </ul>
       <dl className="classic-facts">
         <div>
@@ -356,5 +425,6 @@ export const sectionComponents: Record<
   education: EducationSection,
   security: SecuritySection,
   achievements: AchievementsSection,
+  growth: GrowthSection,
   contact: ContactSection,
 }

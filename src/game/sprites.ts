@@ -37,10 +37,18 @@ export function idleFrame(dir: Direction): number {
 }
 
 const SKIN = '#e8b58c'
-const HAIR = '#2e1f18'
-const SHIRT = '#3f7fb5'
-const PANTS = '#3a4a63'
-const SHOE = '#241a14'
+/** Dark brown, per spec's "dark brown or pink-tinted hair" — kept dark for
+ *  contrast against the bright pink clothing rather than tinting it too. */
+const HAIR = '#4a2a20'
+/** Pink shirt/dress — the character's main colour, distinct from the
+ *  village's own palette so only the player reads as pink. */
+const SHIRT = '#ee6fa8'
+/** Dark pink/burgundy skirt and legs. */
+const LOWER = '#7a2350'
+const SHOE = '#2e1f1c'
+/** Bow / hair clip accent — a brighter pink than the shirt so it still
+ *  reads as a distinct accessory rather than blending into the hair. */
+const BOW = '#ff9fd0'
 const OUTLINE = '#1b1410'
 
 /**
@@ -69,11 +77,18 @@ function drawFrame(
 
   const [legL, legR] = LEG_CYCLE[frame]
 
-  // Legs first so the torso overlaps them cleanly.
-  px(5, 12, 2, 3 - legL, PANTS)
-  px(9, 12, 2, 3 - legR, PANTS)
+  // Legs first so the torso/skirt overlaps them cleanly. Same geometry and
+  // per-frame shortening as before — only the colour changed — so the walk
+  // cycle timing and silhouette are unchanged.
+  px(5, 12, 2, 3 - legL, LOWER)
+  px(9, 12, 2, 3 - legR, LOWER)
   px(5, 15 - legL, 2, 1, SHOE)
   px(9, 15 - legR, 2, 1, SHOE)
+
+  // Skirt hem: a band one pixel wider than the torso on each side, drawn
+  // before the torso so only its flared edges peek out from underneath —
+  // reads as a dress/skirt rather than plain trousers.
+  px(3, 11, 10, 2, LOWER)
 
   // Torso and arms.
   px(4, 8, 8, 5, SHIRT)
@@ -84,20 +99,32 @@ function drawFrame(
   px(4, 2, 8, 3, HAIR)
   px(4, 5, 8, 4, SKIN)
 
-  // Direction-specific facial detail.
+  // Direction-specific hair (drawn longer than the original short crop —
+  // it drapes to shoulder height, or further down the back when facing
+  // away) and facial detail.
   if (dir === 'up') {
-    // Back of the head: all hair, no face.
-    px(4, 5, 8, 4, HAIR)
+    // Back of the head: hair falls past the shoulder line, but stops short
+    // of the torso's bottom edge so the pink shirt still reads clearly.
+    px(4, 5, 8, 5, HAIR)
   } else if (dir === 'down') {
+    // Two long locks framing the face down to the shoulders.
+    px(3, 6, 1, 6, HAIR)
+    px(12, 6, 1, 6, HAIR)
     px(6, 6, 1, 1, OUTLINE)
     px(9, 6, 1, 1, OUTLINE)
   } else if (dir === 'left') {
-    px(10, 5, 2, 4, HAIR)
+    px(10, 5, 3, 7, HAIR)
     px(6, 6, 1, 1, OUTLINE)
   } else {
-    px(4, 5, 2, 4, HAIR)
+    px(3, 5, 3, 7, HAIR)
     px(9, 6, 1, 1, OUTLINE)
   }
+
+  // Bow / hair clip — a small brighter-pink accessory at the crown, visible
+  // from every angle since the top of the head always faces the camera.
+  px(6, 1, 1, 1, BOW)
+  px(9, 1, 1, 1, BOW)
+  px(7, 1, 2, 1, OUTLINE)
 }
 
 /**

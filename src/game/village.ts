@@ -4,27 +4,35 @@
  * Edit this in any text editor — it is plain ASCII. Every row MUST be the same
  * length; `assertMapIsRectangular()` throws loudly in dev if you break that.
  *
+ * A clean 3x3 grid of nine locations, each a 9x5-tile block, connected by a
+ * grid of generous paths: a horizontal street below each building row and a
+ * vertical street beside each building column, so every district is reachable
+ * by walking straight toward it from the spawn point at the centre.
+ *
  * Legend
  *   .  grass (walkable, no object is created — the background colour shows through)
  *   ,  stone/dirt path (walkable)
  *   P  player spawn point (walkable, renders as path)
  *   ~  water (solid)
  *   T  tree (solid)
- *   +  signpost (solid) — village directory, top yard
- *   1  signpost (solid) — Library <-> Cozy House
- *   6  signpost (solid) — Cozy House <-> Tech Lab
- *   2  signpost (solid) — Tech Lab <-> Security Center
- *   3  signpost (solid) — Trophy Garden <-> Chicken Pen
- *   4  signpost (solid) — Chicken Pen <-> Town Hall
- *   5  signpost (solid) — Town Hall <-> Mailbox
- *   L  Library            -> education
- *   H  Cozy House         -> about
- *   B  Tech Lab           -> projects
- *   S  Security Center    -> security
- *   G  Trophy Garden      -> achievements
- *   C  Chicken pen        -> ambience
- *   M  Town Hall          -> experience
- *   X  Mailbox            -> contact
+ *   1  signpost — About Me Flower Cottage
+ *   2  signpost — Current Roles Train Station
+ *   3  signpost — Engineering Workshop
+ *   4  signpost — AI & Teaching Schoolhouse
+ *   5  signpost — Mobile Innovation Observatory
+ *   6  signpost — Developer Tools Cyber Workshop
+ *   7  signpost — Community Impact Greenhouse
+ *   8  signpost — Growth Farm
+ *   9  signpost — Contact Post Office
+ *   A  About Me Flower Cottage       -> about
+ *   R  Current Roles Train Station   -> experience (current)
+ *   E  Engineering Workshop          -> experience (past)
+ *   S  AI & Teaching Schoolhouse     -> experience (past) + achievements
+ *   O  Mobile Innovation Observatory -> projects
+ *   D  Developer Tools Cyber Workshop -> projects
+ *   G  Community Impact Greenhouse   -> projects
+ *   F  Growth Farm                   -> growth
+ *   X  Contact Post Office           -> contact
  */
 
 /** Size of one tile, in world pixels. Sprites are authored at this size. */
@@ -34,29 +42,39 @@ export const TILE_SIZE = 16
 export const SPAWN_SYMBOL = 'P'
 
 export const MAP: string[] = [
-  '~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~',
-  '~~TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT~~',
-  '~~T..........................................T~~',
-  '~~T....................+.....................T~~',
-  '~~T..........................................T~~',
-  '~~T..LLLLLLLL.HHHHHHHH..BBBBBBBBBB..SSSSSSSSST~~',
-  '~~T..LLLLLLLL.HHHHHHHH..BBBBBBBBBB..SSSSSSSSST~~',
-  '~~T..LLLLLLLL.HHHHHHHH..BBBBBBBBBB..SSSSSSSSST~~',
-  '~~T..LLLLLLLL.HHHHHHHH..BBBBBBBBBB..SSSSSSSSST~~',
-  '~~T..LLLLLLLL.HHHHHHHH..BBBBBBBBBB..SSSSSSSSST~~',
-  '~~T..........1.........6...........2.........T~~',
-  '~~T,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,T~~',
-  '~~T,,,,,,,,,,,,,,,,,,,,P,,,,,,,,,,,,,,,,,,,,,T~~',
-  '~~T..........................................T~~',
-  '~~T.GGGGGGGGG3.CCCCCCCC.4.MMMMMMMM.5.XXXXXX..T~~',
-  '~~T.GGGGGGGGG..CCCCCCCC...MMMMMMMM...XXXXXX..T~~',
-  '~~T.GGGGGGGGG..CCCCCCCC...MMMMMMMM...XXXXXX..T~~',
-  '~~T.GGGGGGGGG..CCCCCCCC...MMMMMMMM...XXXXXX..T~~',
-  '~~T..........................................T~~',
-  '~~T..........................................T~~',
-  '~~TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT~~',
-  '~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~',
-  '~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~',
+  '~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~',
+  '~~TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT~~',
+  '~~T...........,,,,,.........,,,,,...........T~~',
+  '~~T...........,,,,,.........,,,,,...........T~~',
+  '~~T..AAAAAAAAA,,,,,RRRRRRRRR,,,,,EEEEEEEEE..T~~',
+  '~~T..AAAAAAAAA,,,,,RRRRRRRRR,,,,,EEEEEEEEE..T~~',
+  '~~T..AAAAAAAAA,,,,,RRRRRRRRR,,,,,EEEEEEEEE..T~~',
+  '~~T..AAAAAAAAA,,,,,RRRRRRRRR,,,,,EEEEEEEEE..T~~',
+  '~~T..AAAAAAAAA,,,,,RRRRRRRRR,,,,,EEEEEEEEE..T~~',
+  '~~T...........,,,,,.........,,,,,...........T~~',
+  '~~T......1....,,,,,....2....,,,,,....3......T~~',
+  '~~T...........,,,,,.........,,,,,...........T~~',
+  '~~T...........,,,,,.........,,,,,...........T~~',
+  '~~T...........,,,,,.........,,,,,...........T~~',
+  '~~T..SSSSSSSSS,,,,,OOOOOOOOO,,,,,DDDDDDDDD..T~~',
+  '~~T..SSSSSSSSS,,,,,OOOOOOOOO,,,,,DDDDDDDDD..T~~',
+  '~~T..SSSSSSSSS,,,,,OOOOOOOOO,,,,,DDDDDDDDD..T~~',
+  '~~T..SSSSSSSSS,,,,,OOOOOOOOO,,,,,DDDDDDDDD..T~~',
+  '~~T..SSSSSSSSS,,,,,OOOOOOOOO,,,,,DDDDDDDDD..T~~',
+  '~~T...........,,,,,.........,,,,,...........T~~',
+  '~~T......4....,,,,,....5....,,,,,....6......T~~',
+  '~~T...........,,,,,....P....,,,,,...........T~~',
+  '~~T...........,,,,,.........,,,,,...........T~~',
+  '~~T...T.T.T.T.,,,,,.........,,,,,...........T~~',
+  '~~TT.TTTTTTTTT,,,,,FFFFFFFFF,,,,,XXXXXXXXX..T~~',
+  '~~T..TGGGGGGGT,,,,,FFFFFFFFF,,,,,XXXXXXXXX..T~~',
+  '~~TT.TGGGGGGGT,,,,,FFFFFFFFF,,,,,XXXXXXXXX..T~~',
+  '~~T..TGGGGGGGT,,,,,FFFFFFFFF,,,,,XXXXXXXXX..T~~',
+  '~~TT.TGGGGGGGT,,,,,FFFFFFFFF,,,,,XXXXXXXXX..T~~',
+  '~~T...........,,,,,.........,,,,,...........T~~',
+  '~~T......7....,,,,,....8....,,,,,....9......T~~',
+  '~~TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT~~',
+  '~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~',
 ]
 
 /** Colour of the ground the whole map sits on. Grass tiles draw no object. */
@@ -78,29 +96,31 @@ export interface TileSpec {
 export const TILES: Record<string, TileSpec> = {
   '~': { color: '#3f72a4', solid: true, label: 'Water' },
   T: { color: '#2f6b3a', solid: true, label: 'Tree' },
-  '+': { color: '#8a5a2b', solid: true, label: 'Signpost' },
-  // '1'-'6' sit in single-tile-wide gaps between buildings (the only path
-  // between an upper and lower row of stations). Unlike '+' — which stands
-  // in open yard with room to walk around it — these must stay walkable:
-  // if they were solid, the player's collision would stop at the tile
-  // boundary, which lands just outside the interact radius and also walls
-  // off the one lane connecting the two buildings on either side.
+  ',': { color: '#c8b184', solid: false, label: 'Path' },
+  P: { color: '#c8b184', solid: false, label: 'Path' },
+  // Signposts sit in the open street bands or yard margins, never in a
+  // single-tile-wide gap, so there is no need for them to stay solid the way
+  // the old map's narrow-gap signposts did — but keeping them non-solid costs
+  // nothing and means a player can stand exactly on one without a collision
+  // surprise.
   '1': { color: '#8a5a2b', solid: false, label: 'Signpost' },
   '2': { color: '#8a5a2b', solid: false, label: 'Signpost' },
   '3': { color: '#8a5a2b', solid: false, label: 'Signpost' },
   '4': { color: '#8a5a2b', solid: false, label: 'Signpost' },
   '5': { color: '#8a5a2b', solid: false, label: 'Signpost' },
   '6': { color: '#8a5a2b', solid: false, label: 'Signpost' },
-  ',': { color: '#c8b184', solid: false, label: 'Path' },
-  P: { color: '#c8b184', solid: false, label: 'Path' },
-  L: { color: '#7a5230', solid: true, label: 'Library' },
-  H: { color: '#b5651d', solid: true, label: 'Cozy House' },
-  B: { color: '#4a5568', solid: true, label: 'Tech Lab' },
-  S: { color: '#5b3a5b', solid: true, label: 'Security Center' },
-  G: { color: '#8a6d3b', solid: true, label: 'Trophy Garden' },
-  C: { color: '#a98b5d', solid: true, label: 'Chicken Pen' },
-  M: { color: '#6b4f2a', solid: true, label: 'Town Hall' },
-  X: { color: '#45607a', solid: true, label: 'Mailbox' },
+  '7': { color: '#8a5a2b', solid: false, label: 'Signpost' },
+  '8': { color: '#8a5a2b', solid: false, label: 'Signpost' },
+  '9': { color: '#8a5a2b', solid: false, label: 'Signpost' },
+  A: { color: '#c9834a', solid: true, label: 'About Me Flower Cottage' },
+  R: { color: '#5b6b7a', solid: true, label: 'Current Roles Train Station' },
+  E: { color: '#5d6b80', solid: true, label: 'Engineering Workshop' },
+  S: { color: '#9a6b40', solid: true, label: 'AI & Teaching Schoolhouse' },
+  O: { color: '#4a4a7a', solid: true, label: 'Mobile Innovation Observatory' },
+  D: { color: '#3a2f4a', solid: true, label: 'Developer Tools Cyber Workshop' },
+  G: { color: '#7ea8c4', solid: true, label: 'Community Impact Greenhouse' },
+  F: { color: '#8a9a5a', solid: true, label: 'Growth Farm' },
+  X: { color: '#54748f', solid: true, label: 'Contact Post Office' },
 }
 
 /** World size in pixels, derived from the map so the two can never disagree. */
@@ -113,11 +133,13 @@ export const WORLD_HEIGHT = MAP.length * TILE_SIZE
  * (a 16px-wide sprite) cannot reliably stand in front of one station without
  * also being within a neighbour's radius — `InteractionRegistry.nearest()`
  * still resolves that correctly, but the player has no way to aim for a
- * specific one. One tile is the practical floor; `assertStationSpacing()` in
+ * specific one. Every building in the current map is 9 tiles (144px) wide,
+ * which clears this for up to four stations (144 / 5 = 28.8px); widen a
+ * building's block if it ever needs more. `assertStationSpacing()` in
  * `locations.ts` enforces it at boot, the same way `assertMapIsRectangular`
  * enforces the map shape below.
  */
-export const MIN_STATION_SPACING = TILE_SIZE
+export const MIN_STATION_SPACING = 24
 
 /**
  * Guards against the single easiest way to break an ASCII map: a row that is

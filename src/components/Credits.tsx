@@ -1,6 +1,5 @@
 import { creditGroups, originalWork } from '../content/credits'
 import useFocusTrap from '../hooks/useFocusTrap'
-import { Link } from '../router'
 
 /**
  * Shared credits body, used by both the `/credits` page and the in-game
@@ -68,16 +67,8 @@ function CreditsBody({ level }: { level: 2 | 3 }) {
 export default function CreditsPage() {
   return (
     <main className="classic classic-single credits">
-      <nav className="classic-nav" aria-label="Portfolio sections">
-        <ul>
-          <li>
-            <Link to="/">Overview</Link>
-          </li>
-          <li>
-            <Link to="/play">Explore the village</Link>
-          </li>
-        </ul>
-      </nav>
+      {/* No page-local nav — TopBar (Home/logo + village toggle) already
+          covers both links this used to duplicate. */}
       <h1>Credits &amp; licensing</h1>
       <CreditsBody level={2} />
     </main>

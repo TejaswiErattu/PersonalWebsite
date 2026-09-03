@@ -27,6 +27,7 @@ export type RouteId =
   | 'education'
   | 'security'
   | 'achievements'
+  | 'growth'
   | 'contact'
   | 'credits'
   | 'notFound'
@@ -174,11 +175,20 @@ export const routes: RouteMeta[] = [
     section: 'achievements',
   },
   {
+    id: 'growth',
+    path: '/growth',
+    title: `Growth — ${NAME}`,
+    description:
+      "What I'm working toward next — hackathons, a home lab, and continued work on the GitHub Extension — plus a way to send me an idea.",
+    heading: "What I'm Growing Next",
+    section: 'growth',
+  },
+  {
     id: 'contact',
     path: '/contact',
     title: `Contact — ${NAME}`,
     description:
-      'Looking for 2027 software engineering and security internships. Email, LinkedIn, GitHub, and role-specific resumes for software and security tracks.',
+      'Looking for 2027 software engineering and security internships. Email, LinkedIn, and GitHub for Tejaswi Erattu Taj, based in Seattle, Washington.',
     heading: 'Contact',
     section: 'contact',
   },
@@ -226,6 +236,18 @@ export function matchRoute(pathname: string): RouteMeta {
  * the previous/next links at the foot of each section page.
  */
 export const sectionRoutes: RouteMeta[] = routes.filter((route) => route.section !== undefined)
+
+/**
+ * The five links shown in the single global navigation bar (`TopBar`), in
+ * the order they should appear. This is a curated subset of `sectionRoutes`
+ * rather than all of it: `/education`, `/security`, and `/achievements` stay
+ * live as compatibility routes — reachable by direct URL, by the
+ * previous/next pager on every section page, and by in-page cross-links —
+ * without cluttering the one navigation bar the redesign calls for.
+ */
+export const primaryNavRoutes: RouteMeta[] = (
+  ['about', 'experience', 'projects', 'growth', 'contact'] as const
+).map((id) => getRoute(id))
 
 /**
  * The project write-up pages, in the same order they appear in `routes`

@@ -10,10 +10,10 @@ import { sectionComponents } from './sections'
  * so the component renders at `level={1}` and its internal headings fall to h2
  * and h3 — no skipped levels, exactly one h1.
  *
- * Every section page carries the full section nav plus previous/next links.
- * That is what requirement 11 is really asking for: not decoration, but enough
- * internal links that a crawler entering on any single page can reach every
- * other page without going back to the homepage first.
+ * Every section page carries previous/next links chaining through every
+ * section (see `sectionRoutes` in `seo/routes.ts`) plus the global nav in
+ * `TopBar` — enough internal links that a crawler entering on any single
+ * page can reach every other page without going back to the homepage first.
  */
 export default function SectionPage({ route }: { route: RouteMeta }) {
   if (!route.section) throw new Error(`Route ${route.id} has no section`)
@@ -28,24 +28,10 @@ export default function SectionPage({ route }: { route: RouteMeta }) {
 
   return (
     <main className="classic classic-single">
-      <nav className="classic-nav" aria-label="Portfolio sections">
-        <ul>
-          <li>
-            <Link to="/">Overview</Link>
-          </li>
-          {sectionRoutes.map((candidate) => (
-            <li key={candidate.id}>
-              <Link
-                to={candidate.path}
-                aria-current={candidate.id === route.id ? 'page' : undefined}
-              >
-                {labelFor(candidate)}
-              </Link>
-            </li>
-          ))}
-        </ul>
-      </nav>
-
+      {/* No second nav list here — the single global nav (TopBar) already
+          links to every primary section, and the pager below chains through
+          every section (including the ones not in the primary nav) so a
+          crawler can still walk the whole graph from any single page. */}
       <Section level={1} title={route.heading} />
 
       <nav className="classic-pager" aria-label="Previous and next section">

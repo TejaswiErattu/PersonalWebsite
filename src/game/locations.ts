@@ -2,34 +2,50 @@
  * WHERE YOU ADD NEW LOCATIONS.
  *
  * Every building on the map has one entry below. An entry ties together three
- * things: the map symbol it is drawn from, how it looks, and — optionally —
- * the dialogue it opens.
+ * things: the map symbol it is drawn from, how it looks, and the dialogue it
+ * opens.
  *
  * Two shapes of building exist:
- *   - Single-door (`dialogue`): one trigger centred on the bottom edge. This
- *     is the Cozy House pattern — copy it for a building with one topic.
+ *   - Single-door (`dialogue`): one trigger centred on the bottom edge.
  *   - Multi-station (`stations`): several triggers spaced along the bottom
- *     edge, one per topic, each opening its own dialogue. This is the
- *     Security Center / Tech Lab pattern — copy it for a building that holds
- *     more than one thing to read about. `registry.nearest()` still
- *     guarantees only the closest station ever responds, so packing several
- *     into one wall is safe.
+ *     edge, one per topic, each opening its own dialogue. `registry.nearest()`
+ *     still guarantees only the closest station ever responds, so packing
+ *     several into one wall is safe.
  *
  * A location has exactly one of `dialogue` or `stations` populated; the other
- * stays `null` / `undefined`.
+ * stays `null` / `undefined`. Every location in the current 3x3 village is a
+ * multi-station building — even the farm, whose "stations" are planting
+ * plots rather than windows.
  *
  * Rules of thumb for writing dialogue:
  *   - Pull the words from `content.ts`. Never type prose in here, or the
  *     game and classic view will drift apart.
- *   - One line per speech bubble. Aim for two or three sentences each.
- *   - If a station's content already lives on another building (e.g. an
- *     experience entry that Town Hall will also show), don't retype it —
- *     add a `card.crossLink` and let `experienceDialogue()` build it once.
+ *   - Station labels are pulled from `content.villageLocations` (the
+ *     `windows` list authored in Phase 2), via `windowLabel()` below, so the
+ *     in-world prompt ("Press E to enter <label>") always matches the name
+ *     the signpost legend already promised.
+ *   - If a station's content already lives on a project entry (e.g. an
+ *     experience entry whose write-up is really a project's `detail`),
+ *     merge the two rather than retyping either — see the Kerala Association
+ *     and Cyber Minds stations below.
  */
 
-import { content, type ContentLink, type DetailBlock } from '../content/content'
+import {
+  content,
+  contextualActions,
+  experienceForLocation,
+  getVillageLocation,
+  projectsForLocation,
+  type ContentLink,
+  type DetailBlock,
+} from '../content/content'
 import { MIN_STATION_SPACING, TILE_SIZE, findTileRect } from './village'
-import { makePalette, type BuildingPalette } from './worldSprites'
+import {
+  makePalette,
+  type BuildingPalette,
+  type BuildingVariant,
+  type IconId,
+} from './worldSprites'
 
 /**
  * The structured screen shown after a dialogue's lines finish: tech chips,
@@ -42,50 +58,70 @@ export interface DialogueCard {
   crossLink?: { label: string; experienceId: string }
 }
 
-/** One screen of text. The dialogue box shows `lines` one at a time. */
+/** One screen of content, rendered all at once in the village overlay. */
 export interface Dialogue {
   /** Matches the section id in content.ts, so both stay in step. */
   id: string
   title: string
   lines: string[]
   /**
-   * A project's long-form write-up, paged through one block at a time after
-   * `lines` finishes — the same `DetailBlock[]` the project's own
-   * `/projects/<id>` page renders, via the same `DetailBlockView`. Shown
-   * before `card`, if both are set.
+   * A project's long-form write-up — the same `DetailBlock[]` the project's
+   * own `/projects/<id>` page renders, via the same `DetailBlockView`.
    */
   blocks?: DetailBlock[]
-  /** Shown after `blocks` (or after the last line, if there are none), in
-   *  place of closing immediately. */
+  /** Tech chips, links, and/or a cross-link, shown after `lines`/`blocks`. */
   card?: DialogueCard
+  /**
+   * Renders the Growth Farm's `SuggestionForm` (the `mailto:` box) after
+   * `lines`, in place of `blocks`/`card`. The only interactive content any
+   * dialogue carries — everything else here is static text pulled from
+   * `content.ts`.
+   */
+  suggestionForm?: boolean
 }
 
-/** One trigger inside a multi-station building (a terminal, a workstation). */
+/** One trigger inside a multi-station building (a window, a plot). */
 export interface StationDef {
   /** Stable id, combined with the building symbol to register uniquely. */
   id: string
   /** Shown in the "Press E to enter…" prompt. */
   label: string
   dialogue: () => Dialogue
+  /** Frame/awning colour for this window's world sprite. */
+  accent: string
+  /** Small pixel icon drawn on the window/plot marker. */
+  icon: IconId
+  /** Short plaque text painted under the window/plot in-world. */
+  plaque: string
 }
+
+/** One of the four special locations with a contextual side-button action. */
+export type ContextualActionId = keyof typeof contextualActions
 
 export interface LocationDef {
   /** The character used for this building in the map in `village.ts`. */
   symbol: string
-  /** Shown in the "Press E to enter…" prompt for single-door buildings. */
+  /** Human-readable name, shown in dialogue titles and used for debugging. */
   name: string
   palette: BuildingPalette
-  /** Selects a non-default facade. See `worldSprites.ts`. */
-  variant?: 'security'
+  /** Which procedural facade to draw. `null` for the farm, which uses its own shape. */
+  variant: BuildingVariant | null
+  /** Facade sign text painted above the roofline, e.g. "ABOUT ME". */
+  signText: string
   /**
    * Builds the dialogue when the player interacts with a single-door
-   * building. `null` means the building is drawn and solid, but nothing
-   * happens when you walk up to it — no cue, no prompt, no trigger
-   * registered (or that it uses `stations` instead).
+   * building. `null` means the building uses `stations` instead.
    */
   dialogue: (() => Dialogue) | null
   /** Populated instead of `dialogue` for buildings with more than one topic. */
   stations?: StationDef[]
+  /**
+   * Set only on the four locations with a contextual action button (train
+   * station, greenhouse, farm, post office). `createGame.ts` shows that
+   * location's button whenever the player is nearby, and dispatches a press
+   * to the matching `GameHandle.trigger*()` stub.
+   */
+  contextualAction?: ContextualActionId
 }
 
 /** Shorthand for joining several existing content.ts strings into one beat. */
@@ -93,393 +129,31 @@ function join(items: string[]): string {
   return items.join(' · ')
 }
 
-export const LOCATIONS: LocationDef[] = [
-  {
-    symbol: 'H',
-    name: 'Cozy House',
-    palette: makePalette('#c8763a', '#8c3f2a'),
-    // ---------------------------------------------------------------
-    // REFERENCE IMPLEMENTATION. Copy this shape for single-door buildings.
-    // ---------------------------------------------------------------
-    dialogue: () => ({
-      id: 'about',
-      title: 'Cozy House',
-      lines: [
-        content.about.headline,
-        content.about.subheadline,
-        ...content.about.paragraphs,
-      ],
-    }),
-  },
-
-  {
-    symbol: 'L',
-    name: 'Library',
-    palette: makePalette('#9a6b40', '#5d3a22'),
-    // ---------------------------------------------------------------
-    // MULTI-STATION. One bookshelf per skill category, plus a degree
-    // shelf and a competencies index.
-    // ---------------------------------------------------------------
-    dialogue: null,
-    stations: (() => {
-      const education = content.education
-
-      const degreeShelf: StationDef = {
-        id: 'degree',
-        label: 'Degree Shelf',
-        dialogue: () => ({
-          id: 'education-degree',
-          title: `${education.school}`,
-          lines: [
-            education.degree,
-            `${education.focusArea} · Expected ${education.expectedGraduation} · GPA ${education.gpa}`,
-          ],
-        }),
-      }
-
-      // One shelf per `content.education.skills` category — same shape, so
-      // no need to hand-write five near-identical station objects.
-      const categoryShelves: StationDef[] = education.skills.map((group) => ({
-        id: group.category.toLowerCase().replace(/[^a-z]+/g, '-'),
-        label: `${group.category} Shelf`,
-        dialogue: () => ({
-          id: `education-${group.category}`,
-          title: `${group.category} Shelf`,
-          lines: [`${group.category} — ${group.items.length} skills.`, join(group.items)],
-          card: { tech: group.items },
-        }),
-      }))
-
-      const competenciesShelf: StationDef = {
-        id: 'competencies',
-        label: 'Core Competencies Shelf',
-        dialogue: () => ({
-          id: 'education-competencies',
-          title: 'Core Competencies Shelf',
-          lines: [
-            'Every shelf in this room, indexed.',
-            join(education.skills.map((group) => group.category)),
-          ],
-        }),
-      }
-
-      return [degreeShelf, ...categoryShelves, competenciesShelf]
-    })(),
-  },
-  {
-    symbol: 'B',
-    name: 'Tech Lab',
-    palette: makePalette('#5d6b80', '#37414f'),
-    // ---------------------------------------------------------------
-    // MULTI-STATION REFERENCE. Two wings, one station per project.
-    // ---------------------------------------------------------------
-    dialogue: null,
-    stations: (() => {
-      const findProject = (id: string) => {
-        const project = content.projects.find((item) => item.id === id)
-        if (!project) throw new Error(`Tech Lab station "${id}" has no matching project.`)
-        return project
-      }
-
-      // Wing A: stand-alone builds — the full three-beat pattern, no cross-link.
-      const wingA = [
-        { id: 'findar', label: 'Findar Station' },
-        { id: 'bump', label: 'Bump Station' },
-        { id: 'unearthed', label: 'Unearthed Station' },
-        { id: 'terralend', label: 'TerraLend Station' },
-      ].map(({ id, label }) => {
-        const project = findProject(id)
-        return {
-          id: project.id,
-          label,
-          dialogue: (): Dialogue => ({
-            id: project.id,
-            title: project.title,
-            lines: [project.blurb, join(project.built), project.learned],
-            blocks: project.detail?.blocks,
-            card: { tech: project.tech, links: project.links },
-          }),
-        }
-      })
-
-      // Wing B: work that Town Hall also covers — cross-link instead of
-      // repeating the same accomplishments in two buildings.
-      const wingB = [
-        {
-          id: 'kaw',
-          label: 'Kerala Platform Station',
-          experienceId: 'kaw',
-          crossLinkLabel: 'See my role at Kerala Association of Washington',
-        },
-        {
-          id: 'cyber-minds-chatbot',
-          label: 'Cyber Minds Station',
-          experienceId: 'cyber-minds',
-          crossLinkLabel: 'See my role at Cyber Minds Non-Profit',
-        },
-      ].map(({ id, label, experienceId, crossLinkLabel }) => {
-        const project = findProject(id)
-        return {
-          id: project.id,
-          label,
-          dialogue: (): Dialogue => ({
-            id: project.id,
-            title: project.title,
-            lines: [project.blurb, project.impact, project.learned],
-            blocks: project.detail?.blocks,
-            card: {
-              tech: project.tech,
-              links: project.links,
-              crossLink: { label: crossLinkLabel, experienceId },
-            },
-          }),
-        }
-      })
-
-      return [...wingA, ...wingB]
-    })(),
-  },
-  {
-    symbol: 'S',
-    name: 'Security Center',
-    palette: makePalette('#3a2f4a', '#241c30'),
-    variant: 'security',
-    // ---------------------------------------------------------------
-    // MULTI-STATION REFERENCE. Six terminals sharing one Palana role.
-    // ---------------------------------------------------------------
-    dialogue: null,
-    stations: (() => {
-      const security = content.security
-      const byline = `${security.role} · ${security.organization} · ${security.period}`
-      const githubExtension = content.projects.find((item) => item.id === 'github-extension')
-      if (!githubExtension) throw new Error('Security Center exhibit has no matching project.')
-
-      return [
-        {
-          id: 'threat-model',
-          label: 'Threat Model Terminal',
-          dialogue: (): Dialogue => ({
-            id: 'security-threat-model',
-            title: 'Threat Model Terminal',
-            lines: [
-              security.bullets[0],
-              byline,
-              join(['Threat Modeling (STRIDE)', 'Zero Trust Architecture', 'IAM / Access Control']),
-            ],
-            card: { tech: ['Threat Modeling (STRIDE)', 'Zero Trust Architecture', 'IAM / Access Control'] },
-          }),
-        },
-        {
-          id: 'vulnerability',
-          label: 'Vulnerability Terminal',
-          dialogue: (): Dialogue => ({
-            id: 'security-vulnerability',
-            title: 'Vulnerability Terminal',
-            lines: [
-              security.bullets[1],
-              byline,
-              join(['Vulnerability Assessment', 'Incident Response', 'IAM / Access Control']),
-            ],
-            card: { tech: ['Vulnerability Assessment', 'Incident Response', 'IAM / Access Control'] },
-          }),
-        },
-        {
-          id: 'tooling',
-          label: 'Tooling Terminal',
-          dialogue: (): Dialogue => ({
-            id: 'security-tooling',
-            title: 'Tooling Terminal',
-            lines: [security.bullets[3], security.bullets[4], byline],
-            card: { tech: ['Semgrep', 'npm audit', 'Burp Suite'] },
-          }),
-        },
-        {
-          id: 'documentation',
-          label: 'Documentation Terminal',
-          dialogue: (): Dialogue => ({
-            id: 'security-documentation',
-            title: 'Documentation Terminal',
-            lines: [
-              security.bullets[2],
-              byline,
-              join([
-                'Responsible AI / AI Risk Management',
-                'Cryptography Fundamentals',
-                'Network Security Fundamentals',
-              ]),
-            ],
-            card: {
-              tech: [
-                'Responsible AI / AI Risk Management',
-                'Cryptography Fundamentals',
-                'Network Security Fundamentals',
-              ],
-            },
-          }),
-        },
-        {
-          id: 'github-extension',
-          label: 'GitHub Extension Exhibit',
-          dialogue: (): Dialogue => ({
-            id: 'github-extension',
-            title: githubExtension.title,
-            lines: [githubExtension.blurb, join(githubExtension.built), githubExtension.learned],
-            card: { tech: githubExtension.tech, links: githubExtension.links },
-          }),
-        },
-        {
-          id: 'skills-wall',
-          label: 'Security Skills Wall',
-          dialogue: (): Dialogue => ({
-            id: 'security-skills',
-            title: 'Security Skills Wall',
-            lines: [byline, join(security.skills), join(security.certifications)],
-            card: { tech: security.skills },
-          }),
-        },
-      ]
-    })(),
-  },
-  {
-    symbol: 'G',
-    name: 'Trophy Garden',
-    palette: makePalette('#a8863f', '#6b5327'),
-    // ---------------------------------------------------------------
-    // MULTI-STATION. One trophy per `content.achievements` entry, plus
-    // one plaque summarising `content.about.highlights`.
-    // ---------------------------------------------------------------
-    dialogue: null,
-    stations: (() => {
-      const trophies: StationDef[] = content.achievements.map((achievement) => ({
-        id: achievement.id,
-        label: `${achievement.title} Trophy`,
-        dialogue: () => ({
-          id: `achievement-${achievement.id}`,
-          title: achievement.title,
-          lines: [
-            achievement.period
-              ? `${achievement.detail} (${achievement.period})`
-              : achievement.detail,
-          ],
-        }),
-      }))
-
-      const plaques: StationDef = {
-        id: 'impact-plaques',
-        label: 'Impact Plaques',
-        dialogue: () => ({
-          id: 'achievements-impact',
-          title: 'Impact Plaques',
-          lines: ['Impact, in numbers.', join(content.about.highlights)],
-        }),
-      }
-
-      return [...trophies, plaques]
-    })(),
-  },
-  {
-    symbol: 'M',
-    name: 'Town Hall',
-    palette: makePalette('#8a6535', '#513a1f'),
-    // ---------------------------------------------------------------
-    // MULTI-STATION. One desk per `content.experience` entry, ordered
-    // chronologically left to right so walking forward walks forward in
-    // time. Every desk calls `experienceDialogue()` directly rather than
-    // rebuilding the bullets, so it always shows the exact words Tech
-    // Lab's cross-links point at.
-    // ---------------------------------------------------------------
-    dialogue: null,
-    stations: (() => {
-      // Chronological order, oldest first — content.experience itself is
-      // newest first, so this list is the one place that order is fixed.
-      const chronological = ['goezz', 'cyber-minds', 'ilink', 'apollo', 'icode', 'kaw', 'ahf']
-
-      return chronological.map((id) => {
-        const entry = content.experience.find((item) => item.id === id)
-        if (!entry) throw new Error(`Town Hall desk "${id}" has no matching experience entry.`)
-        return {
-          id: entry.id,
-          label: `${entry.company} Desk`,
-          dialogue: (): Dialogue => {
-            const dialogue = experienceDialogue(entry.id)
-            if (!dialogue) throw new Error(`experienceDialogue() has no entry for "${entry.id}".`)
-            return dialogue
-          },
-        }
-      })
-    })(),
-  },
-  {
-    symbol: 'X',
-    name: 'Mailbox',
-    palette: makePalette('#54748f', '#324759'),
-    // ---------------------------------------------------------------
-    // SINGLE-DOOR. content.contact, packed entirely into the card so the
-    // two lines read like a note and the links read like an address book.
-    // ---------------------------------------------------------------
-    dialogue: () => {
-      const contact = content.contact
-      return {
-        id: 'contact',
-        title: 'Mailbox',
-        lines: [contact.blurb, contact.availability],
-        card: {
-          tech: contact.rolesSeeking,
-          links: [
-            { label: contact.email, href: `mailto:${contact.email}` },
-            { label: contact.phone, href: `tel:${contact.phone.replace(/[^\d+]/g, '')}` },
-            { label: 'LinkedIn', href: contact.linkedin },
-            { label: 'GitHub', href: contact.github },
-            ...contact.resumes,
-          ],
-        },
-      }
-    },
-  },
-  {
-    symbol: 'C',
-    name: 'Chicken Pen',
-    palette: makePalette('#bda069', '#7d6540'),
-    // Pure ambience — there is no matching section in content.ts.
-    dialogue: null,
-  },
-]
-
-/** Map symbols that a building sprite is drawn for, so tiles skip drawing them. */
-export const BUILDING_SYMBOLS: ReadonlySet<string> = new Set(
-  LOCATIONS.map((location) => location.symbol),
-)
-
-/** One waypost: a single solid map tile with a one-line dialogue, no card. */
-export interface SignpostDef {
-  /** The character used for this signpost in the map in `village.ts`. */
-  symbol: string
-  text: string
+/**
+ * The label for one window/station/plot, pulled from the `windows` list
+ * authored on `content.villageLocations` in Phase 2 — so the in-world prompt
+ * and the signpost legend can never name the same thing two different ways.
+ */
+function windowLabel(locationId: string, windowId: string): string {
+  const window = getVillageLocation(locationId).windows.find((entry) => entry.id === windowId)
+  if (!window) {
+    throw new Error(`Village location "${locationId}" has no window "${windowId}".`)
+  }
+  return window.label
 }
 
-/**
- * Every signpost on the map, keyed by its own map symbol (`findTileRect`
- * resolves one symbol to one bounding box, so each signpost needs a symbol
- * of its own rather than sharing one). Placed at the gaps between building
- * footprints — the actual forks in the walkable space — plus the original
- * directory sign in the top yard.
- */
-export const SIGNPOSTS: SignpostDef[] = [
-  { symbol: '+', text: 'Village Directory: Library · Cozy House · Tech Lab · Security Center →' },
-  { symbol: '1', text: '← Library            Cozy House →' },
-  { symbol: '6', text: '← Cozy House            Tech Lab →' },
-  { symbol: '2', text: '← Tech Lab            Security Center →' },
-  { symbol: '3', text: '← Trophy Garden            Chicken Pen →' },
-  { symbol: '4', text: '← Chicken Pen            Town Hall →' },
-  { symbol: '5', text: '← Town Hall            Mailbox →' },
-]
+/** Looks up a project by id, throwing loudly if `content.ts` drifts. */
+function findProject(id: string) {
+  const project = content.projects.find((item) => item.id === id)
+  if (!project) throw new Error(`No project with id "${id}" in content.ts.`)
+  return project
+}
 
 /**
  * Builds a Dialogue straight from one `content.experience` entry, by id.
  *
- * This is the cross-link target: Tech Lab's Kerala and Cyber Minds stations
- * call this instead of retyping those roles' bullets, and Town Hall's own
- * NPCs call it too, so both buildings always show the exact same words.
+ * This is the cross-link target for the classic view, and the plain-station
+ * builder for any village desk that has no accompanying project write-up.
  */
 export function experienceDialogue(id: string): Dialogue | null {
   const entry = content.experience.find((item) => item.id === id)
@@ -491,6 +165,535 @@ export function experienceDialogue(id: string): Dialogue | null {
     lines: [`${entry.company} · ${entry.location} · ${entry.period}`, ...entry.bullets],
   }
 }
+
+export const LOCATIONS: LocationDef[] = [
+  {
+    symbol: 'A',
+    name: getVillageLocation('about-cottage').name,
+    palette: makePalette('#c9834a', '#8a4a2b'),
+    variant: 'cottage',
+    signText: 'ABOUT ME',
+    // ---------------------------------------------------------------
+    // About Me Flower Cottage. Three windows: who I am, my education,
+    // and what I'm looking for. Deliberately no technical skills list.
+    // ---------------------------------------------------------------
+    dialogue: null,
+    stations: [
+      {
+        id: 'introduction',
+        label: windowLabel('about-cottage', 'introduction'),
+        accent: '#e88ec0',
+        icon: 'heart',
+        plaque: 'INTRO',
+        dialogue: (): Dialogue => ({
+          id: 'about-introduction',
+          title: windowLabel('about-cottage', 'introduction'),
+          lines: [content.about.headline, content.about.subheadline, ...content.about.paragraphs],
+        }),
+      },
+      {
+        id: 'uw-education',
+        label: windowLabel('about-cottage', 'uw-education'),
+        accent: '#f2d65c',
+        icon: 'cap',
+        plaque: 'UW / EDU',
+        dialogue: (): Dialogue => ({
+          id: 'about-education',
+          title: windowLabel('about-cottage', 'uw-education'),
+          lines: [
+            content.education.school,
+            content.education.degree,
+            `${content.education.focusArea} · Expected ${content.education.expectedGraduation} · GPA ${content.education.gpa}`,
+          ],
+        }),
+      },
+      {
+        id: 'looking-for',
+        label: windowLabel('about-cottage', 'looking-for'),
+        accent: '#9ec9f5',
+        icon: 'compass',
+        plaque: 'LOOKING FOR',
+        dialogue: (): Dialogue => ({
+          id: 'about-looking-for',
+          title: windowLabel('about-cottage', 'looking-for'),
+          lines: [content.contact.blurb, content.contact.availability],
+          card: { tech: content.contact.rolesSeeking },
+        }),
+      },
+    ],
+  },
+  {
+    symbol: 'R',
+    name: getVillageLocation('current-roles-station').name,
+    palette: makePalette('#5b6b7a', '#33424f'),
+    variant: 'trainStation',
+    signText: 'CURRENT ROLES',
+    contextualAction: 'incomingTrain',
+    // ---------------------------------------------------------------
+    // Current Roles Train Station. One platform window per role I hold
+    // today — Palana, Accountability & Hopeful Fridays, and Women in
+    // Informatics — built straight from `content.experience`. Colours
+    // match the spec's own worked example: blue shield / gold planning /
+    // purple finance.
+    // ---------------------------------------------------------------
+    dialogue: null,
+    stations: experienceForLocation('current-roles-station').map((entry) => {
+      const visual: Record<string, { accent: string; icon: IconId; plaque: string }> = {
+        palana: { accent: '#4a7ac4', icon: 'shield', plaque: 'PALANA' },
+        ahf: { accent: '#e0a45b', icon: 'flag', plaque: 'AHF' },
+        winfo: { accent: '#9a6bcf', icon: 'coin', plaque: 'WINFO' },
+      }
+      const v = visual[entry.id] ?? { accent: '#4a7ac4', icon: 'shield' as IconId, plaque: entry.company }
+      return {
+        id: entry.id,
+        label: windowLabel('current-roles-station', entry.id),
+        ...v,
+        dialogue: (): Dialogue => {
+          const dialogue = experienceDialogue(entry.id)
+          if (!dialogue) throw new Error(`Current Roles station "${entry.id}" has no matching entry.`)
+          return dialogue
+        },
+      }
+    }),
+  },
+  {
+    symbol: 'E',
+    name: getVillageLocation('engineering-workshop').name,
+    palette: makePalette('#5d6b80', '#37414f'),
+    variant: 'workshop',
+    signText: 'ENGINEERING EXPERIENCE',
+    // ---------------------------------------------------------------
+    // Engineering Workshop. Past engineering roles: Kerala Association
+    // of Washington, iLink Digital, GoEzz. The Kerala station also
+    // carries the full membership-platform write-up and recognition
+    // photo, since that project came directly out of this role.
+    // ---------------------------------------------------------------
+    dialogue: null,
+    stations: experienceForLocation('engineering-workshop').map((entry) => {
+      const visual: Record<string, { accent: string; icon: IconId; plaque: string }> = {
+        kaw: { accent: '#e0a45b', icon: 'gear', plaque: 'KAW' },
+        ilink: { accent: '#5bb0a0', icon: 'wrench', plaque: 'ILINK' },
+        goezz: { accent: '#d9483b', icon: 'bolt', plaque: 'GOEZZ' },
+      }
+      const v = visual[entry.id] ?? { accent: '#e0a45b', icon: 'gear' as IconId, plaque: entry.company }
+      if (entry.id === 'kaw') {
+        const project = findProject('kaw')
+        return {
+          id: entry.id,
+          label: windowLabel('engineering-workshop', entry.id),
+          ...v,
+          dialogue: (): Dialogue => ({
+            id: 'engineering-kaw',
+            title: `${entry.role} — ${entry.company}`,
+            lines: [`${entry.company} · ${entry.location} · ${entry.period}`, ...entry.bullets],
+            blocks: project.detail?.blocks,
+            card: { tech: project.tech, links: project.links },
+          }),
+        }
+      }
+      return {
+        id: entry.id,
+        label: windowLabel('engineering-workshop', entry.id),
+        ...v,
+        dialogue: (): Dialogue => {
+          const dialogue = experienceDialogue(entry.id)
+          if (!dialogue) throw new Error(`Engineering Workshop station "${entry.id}" has no matching entry.`)
+          return dialogue
+        },
+      }
+    }),
+  },
+  {
+    symbol: 'S',
+    name: getVillageLocation('ai-teaching-schoolhouse').name,
+    palette: makePalette('#9a6b40', '#5d3a22'),
+    variant: 'schoolhouse',
+    signText: 'AI & TEACHING',
+    // ---------------------------------------------------------------
+    // AI & Teaching Schoolhouse. Apollo AI, Cyber Minds, iCode, and the
+    // Martial Arts leadership achievement. The Cyber Minds station also
+    // carries the chatbot project's tech and links.
+    // ---------------------------------------------------------------
+    dialogue: null,
+    stations: (() => {
+      const visual: Record<string, { accent: string; icon: IconId; plaque: string }> = {
+        'apollo-ai': { accent: '#8a6bcf', icon: 'robot', plaque: 'APOLLO AI' },
+        'cyber-minds': { accent: '#5bb0a0', icon: 'chat', plaque: 'CYBER MINDS' },
+        icode: { accent: '#e0a45b', icon: 'book', plaque: 'ICODE' },
+      }
+      const roleStations = experienceForLocation('ai-teaching-schoolhouse').map((entry) => {
+        const v = visual[entry.id] ?? { accent: '#8a6bcf', icon: 'robot' as IconId, plaque: entry.company }
+        if (entry.id === 'cyber-minds') {
+          const project = findProject('cyber-minds-chatbot')
+          return {
+            id: entry.id,
+            label: windowLabel('ai-teaching-schoolhouse', entry.id),
+            ...v,
+            dialogue: (): Dialogue => ({
+              id: 'schoolhouse-cyber-minds',
+              title: `${entry.role} — ${entry.company}`,
+              lines: [`${entry.company} · ${entry.location} · ${entry.period}`, ...entry.bullets],
+              card: { tech: project.tech, links: project.links },
+            }),
+          }
+        }
+        return {
+          id: entry.id,
+          label: windowLabel('ai-teaching-schoolhouse', entry.id),
+          ...v,
+          dialogue: (): Dialogue => {
+            const dialogue = experienceDialogue(entry.id)
+            if (!dialogue) throw new Error(`Schoolhouse station "${entry.id}" has no matching entry.`)
+            return dialogue
+          },
+        }
+      })
+
+      const martialArts = content.achievements.find((item) => item.id === 'martial-arts')
+      if (!martialArts) throw new Error('Schoolhouse "martial-arts" station has no matching achievement.')
+      const martialArtsStation: StationDef = {
+        id: martialArts.id,
+        label: windowLabel('ai-teaching-schoolhouse', 'martial-arts'),
+        accent: '#d9483b',
+        icon: 'belt',
+        plaque: 'MARTIAL ARTS',
+        dialogue: (): Dialogue => ({
+          id: 'schoolhouse-martial-arts',
+          title: martialArts.title,
+          lines: [
+            martialArts.period ? `${martialArts.detail} (${martialArts.period})` : martialArts.detail,
+          ],
+        }),
+      }
+
+      return [...roleStations, martialArtsStation]
+    })(),
+  },
+  {
+    symbol: 'O',
+    name: getVillageLocation('mobile-innovation-observatory').name,
+    palette: makePalette('#4a4a7a', '#2c2c52'),
+    variant: 'observatory',
+    signText: 'MOBILE INNOVATION',
+    // ---------------------------------------------------------------
+    // Mobile Innovation Observatory. Findar and Bump, each opening its
+    // complete long-form write-up in one scroll.
+    // ---------------------------------------------------------------
+    dialogue: null,
+    stations: projectsForLocation('mobile-innovation-observatory').map((project, i) => {
+      const visual = [
+        { accent: '#6b8ecf', icon: 'pin' as IconId, plaque: 'FINDAR' },
+        { accent: '#9a6bcf', icon: 'phone' as IconId, plaque: 'BUMP' },
+      ]
+      const v = visual[i] ?? { accent: '#6b8ecf', icon: 'pin' as IconId, plaque: project.title }
+      return {
+        id: project.id,
+        label: windowLabel('mobile-innovation-observatory', project.id),
+        ...v,
+        dialogue: (): Dialogue => ({
+          id: project.id,
+          title: project.title,
+          lines: [project.blurb, join(project.built), project.learned],
+          blocks: project.detail?.blocks,
+          card: { tech: project.tech, links: project.links },
+        }),
+      }
+    }),
+  },
+  {
+    symbol: 'D',
+    name: getVillageLocation('developer-tools-workshop').name,
+    palette: makePalette('#3a2f4a', '#241c30'),
+    variant: 'cyberWorkshop',
+    signText: 'DEVELOPER TOOLS',
+    // ---------------------------------------------------------------
+    // Developer Tools Cyber Workshop. The GitHub Extension and the
+    // Cyber Study Tracker — the latter's real name and content pulled
+    // directly from its own source, per Phase 1's inspection.
+    // ---------------------------------------------------------------
+    dialogue: null,
+    stations: projectsForLocation('developer-tools-workshop').map((project) => {
+      const visual: Record<string, { accent: string; icon: IconId; plaque: string }> = {
+        'github-extension': { accent: '#e88ec0', icon: 'branch', plaque: 'GITHUB EXT.' },
+        'cyber-study-tracker': { accent: '#8a6bcf', icon: 'terminal', plaque: 'TRACKER' },
+      }
+      const v = visual[project.id] ?? { accent: '#e88ec0', icon: 'branch' as IconId, plaque: project.title }
+      return {
+        id: project.id,
+        label: windowLabel('developer-tools-workshop', project.id),
+        ...v,
+        dialogue: (): Dialogue => ({
+          id: project.id,
+          title: project.title,
+          lines: [
+            project.blurb,
+            join(project.built),
+            project.learned,
+            ...(project.contentTodo ? [project.contentTodo] : []),
+          ],
+          blocks: project.detail?.blocks,
+          card: { tech: project.tech, links: project.links },
+        }),
+      }
+    }),
+  },
+  {
+    symbol: 'G',
+    name: getVillageLocation('community-impact-greenhouse').name,
+    palette: makePalette('#7ea8c4', '#4a7a94'),
+    variant: 'greenhouse',
+    signText: 'COMMUNITY IMPACT',
+    contextualAction: 'plantMore',
+    // ---------------------------------------------------------------
+    // Community Impact Greenhouse. TerraLend, Unearthed Dinos, and the
+    // WINFO Website (real name and content from Phase 1's inspection).
+    // Kept small and light-blue with trees around it in village.ts.
+    // ---------------------------------------------------------------
+    dialogue: null,
+    stations: projectsForLocation('community-impact-greenhouse').map((project) => {
+      const visual: Record<string, { accent: string; icon: IconId; plaque: string }> = {
+        terralend: { accent: '#6f9a45', icon: 'leaf', plaque: 'TERRALEND' },
+        unearthed: { accent: '#a67c52', icon: 'fossil', plaque: 'DINOS' },
+        'winfo-website': { accent: '#6b8ecf', icon: 'globe', plaque: 'WINFO WEBSITE' },
+      }
+      const v = visual[project.id] ?? { accent: '#6f9a45', icon: 'leaf' as IconId, plaque: project.title }
+      return {
+        id: project.id,
+        label: windowLabel('community-impact-greenhouse', project.id),
+        ...v,
+        dialogue: (): Dialogue => ({
+          id: project.id,
+          title: project.title,
+          lines: [
+            project.blurb,
+            join(project.built),
+            project.learned,
+            ...(project.contentTodo ? [project.contentTodo] : []),
+          ],
+          blocks: project.detail?.blocks,
+          card: { tech: project.tech, links: project.links },
+        }),
+      }
+    }),
+  },
+  {
+    symbol: 'F',
+    name: getVillageLocation('growth-farm').name,
+    palette: makePalette('#8a9a5a', '#5a6b3a'),
+    // Farm area, not a house — `createGame.ts` draws it with
+    // `createFarmSprite()` instead of the shared house-shell facade.
+    variant: null,
+    signText: "WHAT I'M GROWING NEXT",
+    contextualAction: 'dropFeed',
+    // ---------------------------------------------------------------
+    // Growth Farm. Not a house — three planting plots, one per
+    // `content.growth.plans` entry, plus a fourth "Suggest Something"
+    // plot opening the mailto suggestion box in-world.
+    // ---------------------------------------------------------------
+    dialogue: null,
+    stations: [
+      ...content.growth.plans.map((plan, i) => {
+        const visual = [
+          { accent: '#e0a45b', icon: 'bolt' as IconId, plaque: 'HACKATHON' },
+          { accent: '#5bb0a0', icon: 'server' as IconId, plaque: 'HOME LAB' },
+          { accent: '#e88ec0', icon: 'branch' as IconId, plaque: 'GH EXT' },
+        ]
+        const v = visual[i] ?? { accent: '#e0a45b', icon: 'sprout' as IconId, plaque: plan.title }
+        return {
+          id: plan.id,
+          label: windowLabel('growth-farm', plan.id),
+          ...v,
+          dialogue: (): Dialogue => ({
+            id: `growth-${plan.id}`,
+            title: plan.title,
+            lines: plan.paragraphs,
+          }),
+        }
+      }),
+      {
+        id: 'suggestion',
+        label: 'Suggest Something',
+        accent: '#9a6bcf',
+        icon: 'mail',
+        plaque: 'SUGGEST',
+        dialogue: (): Dialogue => ({
+          id: 'growth-suggestion',
+          title: 'Suggest Something',
+          lines: [content.growth.intro],
+          suggestionForm: true,
+        }),
+      },
+    ],
+  },
+  {
+    symbol: 'X',
+    name: getVillageLocation('contact-post-office').name,
+    palette: makePalette('#54748f', '#324759'),
+    variant: 'postOffice',
+    signText: 'CONTACT',
+    contextualAction: 'sendMail',
+    // ---------------------------------------------------------------
+    // Contact Post Office. Email, LinkedIn, GitHub — each its own
+    // window rather than one crowded mailbox card.
+    // ---------------------------------------------------------------
+    dialogue: null,
+    stations: [
+      {
+        id: 'email',
+        label: windowLabel('contact-post-office', 'email'),
+        accent: '#6b8ecf',
+        icon: 'mail',
+        plaque: 'EMAIL',
+        dialogue: (): Dialogue => ({
+          id: 'contact-email',
+          title: windowLabel('contact-post-office', 'email'),
+          lines: [content.contact.blurb, content.contact.location],
+          card: {
+            links: [{ label: content.contact.email, href: `mailto:${content.contact.email}` }],
+          },
+        }),
+      },
+      {
+        id: 'linkedin',
+        label: windowLabel('contact-post-office', 'linkedin'),
+        accent: '#4a7ac4',
+        icon: 'link',
+        plaque: 'LINKEDIN',
+        dialogue: (): Dialogue => ({
+          id: 'contact-linkedin',
+          title: windowLabel('contact-post-office', 'linkedin'),
+          lines: [getVillageLocation('contact-post-office').windows.find((w) => w.id === 'linkedin')!.description],
+          card: { links: [{ label: 'LinkedIn', href: content.contact.linkedin }] },
+        }),
+      },
+      {
+        id: 'github',
+        label: windowLabel('contact-post-office', 'github'),
+        accent: '#4a4a4a',
+        icon: 'branch',
+        plaque: 'GITHUB',
+        dialogue: (): Dialogue => ({
+          id: 'contact-github',
+          title: windowLabel('contact-post-office', 'github'),
+          lines: [getVillageLocation('contact-post-office').windows.find((w) => w.id === 'github')!.description],
+          card: { links: [{ label: 'GitHub', href: content.contact.github }] },
+        }),
+      },
+    ],
+  },
+]
+
+/** Map symbols that a building sprite is drawn for, so tiles skip drawing them. */
+export const BUILDING_SYMBOLS: ReadonlySet<string> = new Set(
+  LOCATIONS.map((location) => location.symbol),
+)
+
+/** One waypost: a single solid map tile with a themed dialogue, no card. */
+export interface SignpostDef {
+  /** The character used for this signpost in the map in `village.ts`. */
+  symbol: string
+  /** The location's full name, shown as the overlay title. */
+  title: string
+  /** The location's one-line description, followed by its window legend. */
+  lines: string[]
+  /**
+   * Short heading painted on the signpost's world sprite — per spec, the
+   * in-world sign shows only this, never the full description/legend above.
+   */
+  heading: string
+  /** Board colour, matching the location's building wall colour. */
+  accent: string
+  /** Small pixel icon representing the whole location. */
+  icon: IconId
+}
+
+/**
+ * Maps each signpost's map symbol to the village location it describes.
+ *
+ * `heading` is deliberately short — this is the only text painted on the
+ * world sprite (per spec, the in-world sign shows the location heading
+ * alone, never the full name/description). It matches each building's
+ * facade `signText` in `LOCATIONS` above.
+ */
+const SIGNPOST_LOCATIONS: {
+  symbol: string
+  locationId: string
+  heading: string
+  accent: string
+  icon: IconId
+}[] = [
+  { symbol: '1', locationId: 'about-cottage', heading: 'About Me', accent: '#c9834a', icon: 'heart' },
+  {
+    symbol: '2',
+    locationId: 'current-roles-station',
+    heading: 'Current Roles',
+    accent: '#5b6b7a',
+    icon: 'flag',
+  },
+  {
+    symbol: '3',
+    locationId: 'engineering-workshop',
+    heading: 'Engineering',
+    accent: '#5d6b80',
+    icon: 'gear',
+  },
+  {
+    symbol: '4',
+    locationId: 'ai-teaching-schoolhouse',
+    heading: 'AI & Teaching',
+    accent: '#9a6b40',
+    icon: 'cap',
+  },
+  {
+    symbol: '5',
+    locationId: 'mobile-innovation-observatory',
+    heading: 'Mobile Innovation',
+    accent: '#4a4a7a',
+    icon: 'pin',
+  },
+  {
+    symbol: '6',
+    locationId: 'developer-tools-workshop',
+    heading: 'Developer Tools',
+    accent: '#3a2f4a',
+    icon: 'terminal',
+  },
+  {
+    symbol: '7',
+    locationId: 'community-impact-greenhouse',
+    heading: 'Community Impact',
+    accent: '#7ea8c4',
+    icon: 'leaf',
+  },
+  { symbol: '8', locationId: 'growth-farm', heading: 'Growing Next', accent: '#8a9a5a', icon: 'sprout' },
+  { symbol: '9', locationId: 'contact-post-office', heading: 'Contact', accent: '#54748f', icon: 'mail' },
+]
+
+/**
+ * Every signpost on the map, one per location, built straight from
+ * `content.villageLocations` — heading, one-line description, and a legend
+ * of every window/station/plot the visitor is about to walk into. The
+ * `heading` field alone is what gets painted on the world sprite; `lines`
+ * (the full description + legend) is reserved for the overlay opened by
+ * pressing `E`.
+ */
+export const SIGNPOSTS: SignpostDef[] = SIGNPOST_LOCATIONS.map(({ symbol, locationId, heading, accent, icon }) => {
+  const village = getVillageLocation(locationId)
+  return {
+    symbol,
+    title: village.name,
+    heading,
+    accent,
+    icon,
+    lines: [
+      village.signDescription,
+      ...village.windows.map((window) => `${window.label} — ${window.description}`),
+    ],
+  }
+})
+
+/** Map symbols that a signpost sprite is drawn for, so tiles skip drawing them. */
+export const SIGNPOST_SYMBOLS: ReadonlySet<string> = new Set(SIGNPOSTS.map((s) => s.symbol))
 
 /**
  * Guards against station triggers packed tighter than the player can aim.
@@ -520,4 +723,3 @@ export function assertStationSpacing(): void {
     }
   }
 }
-
