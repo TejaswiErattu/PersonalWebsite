@@ -83,7 +83,7 @@ export interface ProjectDetail {
   blocks: DetailBlock[]
 }
 
-/** One workstation inside the Tech Lab. */
+/** One project write-up — a station window (see `locationId`) and/or a standalone `/projects/<id>` page. */
 export interface Project {
   id: string
   title: string
@@ -113,7 +113,7 @@ export interface Project {
   contentTodo?: string
 }
 
-/** One desk NPC inside the Town Hall. */
+/** One role — a station window in the Current Roles Train Station, Engineering Workshop, or Schoolhouse (see `locationId`). */
 export interface ExperienceEntry {
   id: string
   role: string
@@ -127,7 +127,7 @@ export interface ExperienceEntry {
   locationId?: string
 }
 
-/** Library content. */
+/** Schooling, shown in the About Me Flower Cottage's "UW and Education" window and the classic Education section. */
 export interface Education {
   school: string
   degree: string
@@ -137,7 +137,7 @@ export interface Education {
   skills: { category: string; items: string[] }[]
 }
 
-/** Security Center content. */
+/** Content for the classic Security section (compatibility route, folded into Experience/Achievements elsewhere). */
 export interface SecurityProfile {
   role: string
   organization: string
