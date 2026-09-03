@@ -11,7 +11,9 @@
  *
  * Legend
  *   .  grass (walkable, no object is created — the background colour shows through)
- *   ,  stone/dirt path (walkable)
+ *   ,  stone path (walkable) — narrow 3-tile-wide walkways, not wide plazas
+ *   v  flowerbed (walkable) — borders every path and softens the greenhouse yard
+ *   b  bush (walkable) — low landscaping, never blocks a route
  *   P  player spawn point (walkable, renders as path)
  *   ~  water (solid)
  *   T  tree (solid)
@@ -44,35 +46,35 @@ export const SPAWN_SYMBOL = 'P'
 export const MAP: string[] = [
   '~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~',
   '~~TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT~~',
-  '~~T...........,,,,,.........,,,,,...........T~~',
-  '~~T...........,,,,,.........,,,,,...........T~~',
-  '~~T..AAAAAAAAA,,,,,RRRRRRRRR,,,,,EEEEEEEEE..T~~',
-  '~~T..AAAAAAAAA,,,,,RRRRRRRRR,,,,,EEEEEEEEE..T~~',
-  '~~T..AAAAAAAAA,,,,,RRRRRRRRR,,,,,EEEEEEEEE..T~~',
-  '~~T..AAAAAAAAA,,,,,RRRRRRRRR,,,,,EEEEEEEEE..T~~',
-  '~~T..AAAAAAAAA,,,,,RRRRRRRRR,,,,,EEEEEEEEE..T~~',
-  '~~T...........,,,,,.........,,,,,...........T~~',
-  '~~T......1....,,,,,....2....,,,,,....3......T~~',
-  '~~T...........,,,,,.........,,,,,...........T~~',
-  '~~T...........,,,,,.........,,,,,...........T~~',
-  '~~T...........,,,,,.........,,,,,...........T~~',
-  '~~T..SSSSSSSSS,,,,,OOOOOOOOO,,,,,DDDDDDDDD..T~~',
-  '~~T..SSSSSSSSS,,,,,OOOOOOOOO,,,,,DDDDDDDDD..T~~',
-  '~~T..SSSSSSSSS,,,,,OOOOOOOOO,,,,,DDDDDDDDD..T~~',
-  '~~T..SSSSSSSSS,,,,,OOOOOOOOO,,,,,DDDDDDDDD..T~~',
-  '~~T..SSSSSSSSS,,,,,OOOOOOOOO,,,,,DDDDDDDDD..T~~',
-  '~~T...........,,,,,.........,,,,,...........T~~',
-  '~~T......4....,,,,,....5....,,,,,....6......T~~',
-  '~~T...........,,,,,....P....,,,,,...........T~~',
-  '~~T...........,,,,,.........,,,,,...........T~~',
-  '~~T...T.T.T.T.,,,,,.........,,,,,...........T~~',
-  '~~TT.TTTTTTTTT,,,,,FFFFFFFFF,,,,,XXXXXXXXX..T~~',
-  '~~T..TGGGGGGGT,,,,,FFFFFFFFF,,,,,XXXXXXXXX..T~~',
-  '~~TT.TGGGGGGGT,,,,,FFFFFFFFF,,,,,XXXXXXXXX..T~~',
-  '~~T..TGGGGGGGT,,,,,FFFFFFFFF,,,,,XXXXXXXXX..T~~',
-  '~~TT.TGGGGGGGT,,,,,FFFFFFFFF,,,,,XXXXXXXXX..T~~',
-  '~~T...........,,,,,.........,,,,,...........T~~',
-  '~~T......7....,,,,,....8....,,,,,....9......T~~',
+  '~~T...........v,,,v.........v,,,v...........T~~',
+  '~~T...........v,,,v.........v,,,v...........T~~',
+  '~~T..AAAAAAAAAv,,,vRRRRRRRRRv,,,vEEEEEEEEE..T~~',
+  '~~T..AAAAAAAAAv,,,vRRRRRRRRRv,,,vEEEEEEEEE..T~~',
+  '~~T..AAAAAAAAAv,,,vRRRRRRRRRv,,,vEEEEEEEEE..T~~',
+  '~~T..AAAAAAAAAv,,,vRRRRRRRRRv,,,vEEEEEEEEE..T~~',
+  '~~T..AAAAAAAAAv,,,vRRRRRRRRRv,,,vEEEEEEEEE..T~~',
+  '~~T.....P.....v,,,v.........v,,,v...........T~~',
+  '~~T......1....v,,,v....2....v,,,v....3......T~~',
+  '~~T...........v,,,v.........v,,,v...........T~~',
+  '~~T...........v,,,v.........v,,,v...........T~~',
+  '~~T...........v,,,v.........v,,,v...........T~~',
+  '~~T..SSSSSSSSSv,,,vOOOOOOOOOv,,,vDDDDDDDDD..T~~',
+  '~~T..SSSSSSSSSv,,,vOOOOOOOOOv,,,vDDDDDDDDD..T~~',
+  '~~T..SSSSSSSSSv,,,vOOOOOOOOOv,,,vDDDDDDDDD..T~~',
+  '~~T..SSSSSSSSSv,,,vOOOOOOOOOv,,,vDDDDDDDDD..T~~',
+  '~~T..SSSSSSSSSv,,,vOOOOOOOOOv,,,vDDDDDDDDD..T~~',
+  '~~T...........v,,,v.........v,,,v...........T~~',
+  '~~T......4....v,,,v....5....v,,,v....6......T~~',
+  '~~T...........v,,,v.........v,,,v...........T~~',
+  '~~T...........v,,,v.........v,,,v...........T~~',
+  '~~T...T.v.v.T.v,,,v.........v,,,v...........T~~',
+  '~~TT.T.b.v.b.Tv,,,vFFFFFFFFFv,,,vXXXXXXXXX..T~~',
+  '~~T..bGGGGGGGbv,,,vFFFFFFFFFv,,,vXXXXXXXXX..T~~',
+  '~~TT.bGGGGGGGbv,,,vFFFFFFFFFv,,,vXXXXXXXXX..T~~',
+  '~~T..bGGGGGGGbv,,,vFFFFFFFFFv,,,vXXXXXXXXX..T~~',
+  '~~TT.bGGGGGGGbv,,,vFFFFFFFFFv,,,vXXXXXXXXX..T~~',
+  '~~T...........v,,,v.........v,,,v...........T~~',
+  '~~T......7....v,,,v....8....v,,,v....9......T~~',
   '~~TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT~~',
   '~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~',
 ]
@@ -98,6 +100,12 @@ export const TILES: Record<string, TileSpec> = {
   T: { color: '#2f6b3a', solid: true, label: 'Tree' },
   ',': { color: '#c8b184', solid: false, label: 'Path' },
   P: { color: '#c8b184', solid: false, label: 'Path' },
+  // Drawn as sprites (a stone-path texture, a flower cluster, a small bush)
+  // rather than the flat colour these fallback specs describe — see
+  // `buildLevel()` in `createGame.ts`. The colours here only matter if that
+  // sprite ever fails to load.
+  v: { color: '#e88ec0', solid: false, label: 'Flowerbed' },
+  b: { color: '#3f7a3f', solid: false, label: 'Bush' },
   // Signposts sit in the open street bands or yard margins, never in a
   // single-tile-wide gap, so there is no need for them to stay solid the way
   // the old map's narrow-gap signposts did — but keeping them non-solid costs

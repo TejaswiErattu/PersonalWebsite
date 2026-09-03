@@ -1,5 +1,6 @@
 import kaplay, { type KAPLAYCtx, type GameObj } from 'kaplay'
 
+import { playTrainHorn } from '../audio/audio'
 import { canStandAt } from './collision'
 import { InteractionRegistry } from './interactions'
 import {
@@ -36,14 +37,18 @@ import {
   FLOWER_VARIANTS,
   TRAIN_WIDTH,
   createBuildingSprite,
+  createBushSprite,
   createCueSprite,
   createFarmSprite,
   createFeedPileSprite,
   createEnvelopeSprite,
+  createPathTileSprite,
   createRailSprite,
   createSignpostSprite,
+  createSmokePuffSprite,
   createTrainSprite,
   postOfficeChimneyMouth,
+  trainSmokestackMouth,
 } from './worldSprites'
 
 /** Player walking speed, in world pixels per second. */
@@ -169,6 +174,46 @@ const TRAIN_REDUCED_HOLD_SECONDS = 2.5
  * the top row of buildings, not overlapping the station's own facade.
  */
 const TRAIN_TRACK_OFFSET = 12
+
+/**
+ * How far in from each edge of the world the track's rails stop, in map
+ * tiles — the water border (2 tiles) plus the tree line behind it (1 tile),
+ * so the rail sprite and the train's whole journey stay on green land
+ * instead of appearing to run through water or emerge from outside the
+ * village. Both sides of the map use the same border width, so a track
+ * this much shorter than `WORLD_WIDTH` stays centred on it for free.
+ */
+const RAIL_MARGIN_TILES = 3
+const RAIL_MARGIN = RAIL_MARGIN_TILES * TILE_SIZE
+const RAIL_WIDTH = WORLD_WIDTH - RAIL_MARGIN * 2
+
+/**
+ * Arrival sequence, once the train reaches the platform: a puff of smoke
+ * from the stack, then — partway through the hold, giving the smoke a beat
+ * to read on its own — the departure horn, then the train pulls out at the
+ * hold's existing end. `TRAIN_HORN_DELAY_SECONDS` has to stay well inside
+ * `TRAIN_HOLD_SECONDS` or the horn would never get a chance to play before
+ * the train leaves.
+ */
+const TRAIN_HORN_DELAY_SECONDS = 1.5
+/** Under reduced motion the whole hold is shorter, so the horn comes sooner too. */
+const TRAIN_REDUCED_HORN_DELAY_SECONDS = 1
+
+/**
+ * Smoke puffs from the stack: a small burst with varied size, drift and
+ * lifetime so the cloud reads as puffy rather than one uniform blob — the
+ * same "vary each particle's kinematics, not when it spawns" approach the
+ * Send Mail envelopes use.
+ */
+const TRAIN_SMOKE_COUNT = 4
+const TRAIN_SMOKE_LIFE_SECONDS = 0.9
+const TRAIN_SMOKE_LIFE_STAGGER = 0.15
+const TRAIN_SMOKE_RISE_SPEED = 20
+const TRAIN_SMOKE_RISE_STAGGER = 6
+const TRAIN_SMOKE_DRIFT = 7
+/** Reduced motion: puffs appear already drifted apart and hold in place. */
+const TRAIN_SMOKE_REDUCED_LIFE_SECONDS = 1.2
+const TRAIN_SMOKE_REDUCED_SPREAD = 6
 
 /**
  * Fixed, predetermined empty grass tiles near the Community Impact
@@ -355,6 +400,21 @@ function signpostSpriteName(symbol: string): string {
 }
 
 /**
+ * Symbols drawn as a dedicated sprite rather than a flat colour rectangle —
+ * the stone path and its two non-solid landscaping accents. `v` always uses
+ * the same flower variant: these tiles are hand-placed in `village.ts`, and a
+ * fixed variant keeps the map's own art deterministic, matching the seeded
+ * (never `Math.random()`) placement philosophy `scenery.ts` uses for the
+ * ambient flowers scattered on top of plain grass.
+ */
+const GROUND_SPRITE_SYMBOLS: Record<string, string> = {
+  ',': 'path',
+  P: 'path',
+  b: 'bush',
+  v: `flower-${Math.min(1, FLOWER_VARIANTS - 1)}`,
+}
+
+/**
  * Builds the map's visuals. Tiles carry no colliders — walls are enforced by
  * `canStandAt`, which reads the same ASCII map these rectangles are drawn from.
  */
@@ -362,16 +422,30 @@ function buildLevel(k: KAPLAYCtx): void {
   k.addLevel(MAP, {
     tileWidth: TILE_SIZE,
     tileHeight: TILE_SIZE,
-    tiles: Object.fromEntries(
-      Object.entries(TILES)
-        // Buildings and signposts are drawn as their own sprite, not as a
-        // flat block of tile colour.
-        .filter(([symbol]) => !BUILDING_SYMBOLS.has(symbol) && !SIGNPOST_SYMBOLS.has(symbol))
-        .map(([symbol, spec]) => [
+    tiles: {
+      ...Object.fromEntries(
+        Object.entries(TILES)
+          // Buildings and signposts are drawn as their own sprite, not as a
+          // flat block of tile colour. Ground sprite symbols are handled
+          // below instead of falling through to the flat-colour fallback.
+          .filter(
+            ([symbol]) =>
+              !BUILDING_SYMBOLS.has(symbol) &&
+              !SIGNPOST_SYMBOLS.has(symbol) &&
+              !(symbol in GROUND_SPRITE_SYMBOLS),
+          )
+          .map(([symbol, spec]) => [
+            symbol,
+            () => [k.rect(TILE_SIZE, TILE_SIZE), k.color(k.rgb(spec.color)), k.z(0)],
+          ]),
+      ),
+      ...Object.fromEntries(
+        Object.entries(GROUND_SPRITE_SYMBOLS).map(([symbol, sprite]) => [
           symbol,
-          () => [k.rect(TILE_SIZE, TILE_SIZE), k.color(k.rgb(spec.color)), k.z(0)],
+          () => [k.sprite(sprite), k.z(0)],
         ]),
-    ),
+      ),
+    },
     // Grass ('.') and anything undefined draws nothing — the background colour
     // already is grass, so skipping the object keeps the scene light.
     wildcardTile: () => null,
@@ -617,6 +691,8 @@ export function createGame(canvas: HTMLCanvasElement, callbacks: GameCallbacks):
 
   /** Assigned inside `onLoad`, once the train station's world position is known. */
   let triggerTrainFn: (() => void) | null = null
+  /** Destroys any smoke puffs still drifting. Used by `destroy()`. */
+  let clearTrainSmokeFn: (() => void) | null = null
 
   /** Assigned inside `onLoad`, once the player object exists. */
   let triggerPlantMoreFn: (() => void) | null = null
@@ -688,9 +764,12 @@ export function createGame(canvas: HTMLCanvasElement, callbacks: GameCallbacks):
 
   k.loadSprite('cue', createCueSprite())
   k.loadSprite('train', createTrainSprite())
-  k.loadSprite('rail', createRailSprite(WORLD_WIDTH))
+  k.loadSprite('smokePuff', createSmokePuffSprite())
+  k.loadSprite('rail', createRailSprite(RAIL_WIDTH))
   k.loadSprite('feedPile', createFeedPileSprite())
   k.loadSprite('envelope', createEnvelopeSprite())
+  k.loadSprite('path', createPathTileSprite())
+  k.loadSprite('bush', createBushSprite())
 
   loadScenerySprites(k)
 
@@ -783,15 +862,23 @@ export function createGame(canvas: HTMLCanvasElement, callbacks: GameCallbacks):
       if (stationRect) {
         const stationCenterX = (stationRect.col + stationRect.cols / 2) * TILE_SIZE
         const trackY = stationRect.row * TILE_SIZE - TRAIN_TRACK_OFFSET
-        const entryX = -TRAIN_WIDTH
-        const exitX = WORLD_WIDTH + TRAIN_WIDTH
+        // The train enters and leaves at the track's own ends rather than
+        // the world's — `RAIL_MARGIN` keeps both on green land, so the
+        // train never appears to cross water or arrive from outside the
+        // village (see `RAIL_MARGIN_TILES`'s doc comment). Offset by half
+        // the train's own width so its `anchor('center')` sprite never
+        // overhangs past the rail's end into the water border.
+        const entryX = RAIL_MARGIN + TRAIN_WIDTH / 2
+        const exitX = WORLD_WIDTH - RAIL_MARGIN - TRAIN_WIDTH / 2
 
         // A permanent rail, visible whether or not a train is currently
         // running, so "Incoming Train" has real track to arrive on instead
-        // of crossing bare grass. Spans the full world width to match the
-        // train's own entry-to-exit journey; `anchor('center')` matches the
-        // train's own anchor, so the two share the same vertical centre —
-        // "aligned with the track" is a shared `trackY`, not a coincidence.
+        // of crossing bare grass. Sized to `RAIL_WIDTH` (not the full world)
+        // so both ends land on grass, clear of the water border; centred on
+        // the world because the border is the same width on both sides.
+        // `anchor('center')` matches the train's own anchor, so the two
+        // share the same vertical centre — "aligned with the track" is a
+        // shared `trackY`, not a coincidence.
         k.add([
           k.sprite('rail'),
           k.pos(WORLD_WIDTH / 2, trackY),
@@ -800,12 +887,93 @@ export function createGame(canvas: HTMLCanvasElement, callbacks: GameCallbacks):
         ])
 
         type TrainPhase = 'entering' | 'holding' | 'leaving' | 'reducedHold'
-        let train: { obj: GameObj; phase: TrainPhase; timer: number } | null = null
+        let train: { obj: GameObj; phase: TrainPhase; timer: number; hornPlayed: boolean } | null =
+          null
+
+        interface SmokePuff {
+          obj: GameObj
+          age: number
+          life: number
+          driftX: number
+          riseY: number
+        }
+        const smokePuffs: SmokePuff[] = []
+
+        const clearSmoke = (): void => {
+          for (const puff of smokePuffs) puff.obj.destroy()
+          smokePuffs.length = 0
+        }
+
+        // A puff of smoke from the stack, timed to the moment the train
+        // reaches the platform (or, under reduced motion, the moment it
+        // simply appears already stopped there).
+        const spawnSmoke = (trainX: number, trainY: number): void => {
+          const mouth = trainSmokestackMouth()
+          const stackX = trainX + mouth.x
+          const stackY = trainY + mouth.y
+
+          for (let i = 0; i < TRAIN_SMOKE_COUNT; i++) {
+            // Fan the puffs out a little so the burst reads as a puffy
+            // cloud rather than one blob — same idea as the Send Mail
+            // envelopes' per-particle spread, just vertical here since
+            // smoke rises rather than being thrown.
+            const spread = i / (TRAIN_SMOKE_COUNT - 1) - 0.5
+            const obj = k.add([
+              k.sprite('smokePuff'),
+              k.pos(stackX, stackY),
+              k.anchor('center'),
+              k.z(TRAIN_Z + 1),
+              k.opacity(1),
+              k.scale(0.7 + i * 0.12),
+            ])
+
+            if (reducedMotion) {
+              // No rise, no drift — the puffs simply appear already spread
+              // apart above the stack and hold there.
+              obj.pos.x = stackX + spread * TRAIN_SMOKE_REDUCED_SPREAD
+              obj.pos.y = stackY - Math.abs(spread) * 3
+            }
+
+            smokePuffs.push({
+              obj,
+              age: 0,
+              life: reducedMotion
+                ? TRAIN_SMOKE_REDUCED_LIFE_SECONDS
+                : TRAIN_SMOKE_LIFE_SECONDS + i * TRAIN_SMOKE_LIFE_STAGGER,
+              driftX: spread * TRAIN_SMOKE_DRIFT,
+              riseY: TRAIN_SMOKE_RISE_SPEED + i * TRAIN_SMOKE_RISE_STAGGER,
+            })
+          }
+        }
+
+        const updateSmoke = (dt: number): void => {
+          for (let i = smokePuffs.length - 1; i >= 0; i--) {
+            const puff = smokePuffs[i]
+            puff.age += dt
+            const progress = puff.age / puff.life
+
+            if (progress >= 1) {
+              puff.obj.destroy()
+              smokePuffs.splice(i, 1)
+              continue
+            }
+
+            if (!reducedMotion) {
+              puff.obj.pos.y -= puff.riseY * dt
+              puff.obj.pos.x += puff.driftX * dt
+            }
+            // Fades across the whole life, unlike the mail envelopes' late
+            // fade — smoke thins from the moment it leaves the stack.
+            puff.obj.opacity = 1 - progress
+          }
+        }
 
         // Removes the temporary train object and clears the "active" state
         // the stacking guard below checks — called both on natural
         // completion and would be equally safe to call from anywhere else,
-        // since it's idempotent when `train` is already null.
+        // since it's idempotent when `train` is already null. Any smoke
+        // still drifting is left alone — it finishes fading on its own via
+        // `updateSmoke`, independent of the train object it came from.
         const despawnTrain = (): void => {
           train?.obj.destroy()
           train = null
@@ -828,17 +996,28 @@ export function createGame(canvas: HTMLCanvasElement, callbacks: GameCallbacks):
           ])
           // No k.area()/k.body() — a train with no collider physically
           // cannot block the player, regardless of where it visually sits.
-          train = { obj, phase: reducedMotion ? 'reducedHold' : 'entering', timer: 0 }
+          train = { obj, phase: reducedMotion ? 'reducedHold' : 'entering', timer: 0, hornPlayed: false }
+
+          // Reduced motion skips 'entering' entirely — the train is already
+          // at the platform the instant it appears, so this is the one and
+          // only moment it "reaches the station".
+          if (reducedMotion) spawnSmoke(obj.pos.x, obj.pos.y)
         }
 
         updateTrain = (dt: number): void => {
+          updateSmoke(dt)
           if (!train) return
 
           // Reduced motion: skip the cross-screen animation entirely — the
           // train simply appears already stopped at the station, sits for a
-          // shorter beat, and is gone.
+          // shorter beat, and is gone. Smoke already puffed on arrival (see
+          // `spawnTrain`); only the horn is still pending here.
           if (train.phase === 'reducedHold') {
             train.timer += dt
+            if (!train.hornPlayed && train.timer >= TRAIN_REDUCED_HORN_DELAY_SECONDS) {
+              playTrainHorn()
+              train.hornPlayed = true
+            }
             if (train.timer >= TRAIN_REDUCED_HOLD_SECONDS) despawnTrain()
             return
           }
@@ -855,12 +1034,21 @@ export function createGame(canvas: HTMLCanvasElement, callbacks: GameCallbacks):
               train.obj.pos.x = stationCenterX
               train.phase = 'holding'
               train.timer = 0
+              // Reaches the station: smoke puffs immediately, the horn
+              // follows partway through the hold (see `updateTrain`'s
+              // 'holding' branch below), and it leaves once the hold's
+              // existing `TRAIN_HOLD_SECONDS` timer runs out.
+              spawnSmoke(train.obj.pos.x, train.obj.pos.y)
             }
             return
           }
 
           if (train.phase === 'holding') {
             train.timer += dt
+            if (!train.hornPlayed && train.timer >= TRAIN_HORN_DELAY_SECONDS) {
+              playTrainHorn()
+              train.hornPlayed = true
+            }
             if (train.timer >= TRAIN_HOLD_SECONDS) train.phase = 'leaving'
             return
           }
@@ -876,6 +1064,7 @@ export function createGame(canvas: HTMLCanvasElement, callbacks: GameCallbacks):
         // Published so the contextual action button can fire this, the same
         // way `interactFn` publishes the interact action above.
         triggerTrainFn = spawnTrain
+        clearTrainSmokeFn = clearSmoke
       }
     }
 
@@ -1371,10 +1560,11 @@ export function createGame(canvas: HTMLCanvasElement, callbacks: GameCallbacks):
       triggerSendMailFn?.()
     },
     destroy: () => {
-      // Envelopes are the one interaction whose objects can outlive a single
-      // frame with no world state anchoring them, so drop any still in
-      // flight before the context goes.
+      // Envelopes and smoke puffs are the interactions whose objects can
+      // outlive a single frame with no world state anchoring them, so drop
+      // any still in flight before the context goes.
       clearMailFn?.()
+      clearTrainSmokeFn?.()
       k.quit()
       // `quit()` stops the loop but leaves Kaplay's module-level pointer to the
       // "current" context in place. Without clearing it, the next boot (e.g.

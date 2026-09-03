@@ -867,11 +867,6 @@ export function createFarmSprite(
     drawPlaque(ctx, x, plotY + plotHeight + 3, maxPlaqueWidth, visual.plaque, outline)
   })
 
-  // Small feeding-area basket, off to one side, purely decorative here (the
-  // interactive feeding animation is a later phase).
-  fill(ctx, '#8a5a2b', width - 16, height - 12, 10, 8)
-  stroke(ctx, outline, width - 16, height - 12, 10, 8)
-
   stroke(ctx, outline, 0, 0, width, height)
   return ctx.canvas
 }
@@ -974,6 +969,42 @@ export function createTrainSprite(): SpriteCanvas {
   return ctx.canvas
 }
 
+/**
+ * Where the smokestack sits, as an offset from the train sprite's own
+ * centre (its `k.anchor('center')` origin) — the smokestack itself is drawn
+ * at local (9, 0, 3, 4) above, against a `TRAIN_WIDTH`x`TRAIN_HEIGHT` canvas.
+ * `createGame.ts` adds this straight onto the train's world position to find
+ * where "Incoming Train" smoke puffs should spawn from, the same way
+ * `postOfficeChimneyMouth()` locates the mail chimney.
+ */
+export function trainSmokestackMouth(): { x: number; y: number } {
+  return { x: 9 + 1.5 - TRAIN_WIDTH / 2, y: 0 - TRAIN_HEIGHT / 2 }
+}
+
+export const SMOKE_PUFF_SIZE = 8
+
+/**
+ * One soft grey puff for the train's smokestack — a pale core inside a
+ * slightly darker rounded outline, built from a few overlapping rectangles
+ * (no true circle primitive is available on this pixel canvas), the same
+ * technique `createMoteSprite()` uses at a smaller scale.
+ */
+export function createSmokePuffSprite(): SpriteCanvas {
+  const ctx = newCanvas(SMOKE_PUFF_SIZE, SMOKE_PUFF_SIZE)
+  const outer = '#c7c2b6'
+  const inner = '#e9e5d9'
+
+  fill(ctx, outer, 2, 0, 4, 1)
+  fill(ctx, outer, 1, 1, 6, 1)
+  fill(ctx, outer, 0, 2, 8, 4)
+  fill(ctx, outer, 1, 6, 6, 1)
+  fill(ctx, outer, 2, 7, 4, 1)
+  fill(ctx, inner, 2, 2, 4, 3)
+  fill(ctx, inner, 3, 5, 2, 1)
+
+  return ctx.canvas
+}
+
 /** Visual height of the world track laid by `createRailSprite`. */
 export const RAIL_HEIGHT = 6
 
@@ -997,6 +1028,62 @@ export function createRailSprite(width: number): SpriteCanvas {
   fill(ctx, rail, 0, RAIL_HEIGHT - 2, width, 1)
   fill(ctx, railShade, 0, 2, width, 1)
   fill(ctx, railShade, 0, RAIL_HEIGHT - 1, width, 1)
+
+  return ctx.canvas
+}
+
+// ---------------------------------------------------------------------------
+// Ground tiles — the stone path and the two non-solid landscaping accents
+// (`v` flowerbed, `b` bush) that border it, replacing what used to be flat
+// colour rectangles so the village reads as deliberately laid out rather
+// than as large solid-colour blocks. Both are drawn at exactly one map
+// tile's size so `buildLevel()` in `createGame.ts` can drop them straight
+// into the level grid like any other tile sprite.
+// ---------------------------------------------------------------------------
+
+const GROUND_TILE_SIZE = 16
+
+/**
+ * A worn stone path tile: a warm base with a loose 2x2 block pattern and a
+ * thin mortar line, so a run of path tiles reads as laid stone instead of a
+ * single flat tan rectangle. Deliberately subtle — this repeats across every
+ * path tile in the village, so a busy pattern would tile visibly.
+ */
+export function createPathTileSprite(): SpriteCanvas {
+  const ctx = newCanvas(GROUND_TILE_SIZE, GROUND_TILE_SIZE)
+  const base = '#c8b184'
+  const light = '#d3c093'
+  const dark = '#b89c6c'
+  const mortar = '#a68a5c'
+
+  fill(ctx, base, 0, 0, GROUND_TILE_SIZE, GROUND_TILE_SIZE)
+  fill(ctx, light, 1, 1, 6, 6)
+  fill(ctx, dark, 9, 1, 6, 6)
+  fill(ctx, dark, 1, 9, 6, 6)
+  fill(ctx, light, 9, 9, 6, 6)
+  fill(ctx, mortar, 0, 7, GROUND_TILE_SIZE, 2)
+  fill(ctx, mortar, 7, 0, 2, GROUND_TILE_SIZE)
+
+  return ctx.canvas
+}
+
+/**
+ * A single low bush: a rounded mound of leaves on an otherwise transparent
+ * tile, so the grass colour shows through around it. Used to soften the
+ * greenhouse's tree border into individual landscaping instead of a solid
+ * wall — always non-solid, so it can never gate an approach to a window.
+ */
+export function createBushSprite(): SpriteCanvas {
+  const ctx = newCanvas(GROUND_TILE_SIZE, GROUND_TILE_SIZE)
+  const dark = '#2f6b3a'
+  const mid = '#3f7a3f'
+  const light = '#5a9a55'
+
+  fill(ctx, dark, 4, 4, 8, 1)
+  fill(ctx, dark, 2, 5, 12, 2)
+  fill(ctx, mid, 2, 7, 12, 6)
+  fill(ctx, dark, 3, 13, 10, 1)
+  fill(ctx, light, 4, 7, 4, 3)
 
   return ctx.canvas
 }
