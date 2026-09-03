@@ -108,3 +108,14 @@ export function blip(kind: 'open' | 'advance' | 'close'): void {
   if (prefs.muted) return
   engine?.blip(kind)
 }
+
+/**
+ * Plays the Incoming Train's departure horn.
+ *
+ * Same no-op-when-silent contract as `blip`: safe to call unconditionally
+ * from the game loop, muted or not, engine loaded or not.
+ */
+export function playTrainHorn(): void {
+  if (prefs.muted) return
+  engine?.trainHorn()
+}

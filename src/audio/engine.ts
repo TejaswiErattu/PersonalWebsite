@@ -38,6 +38,8 @@ export interface SoundEngine {
   stopBed: () => void
   /** Short UI tick. `kind` only varies the pitch. */
   blip: (kind: 'open' | 'advance' | 'close') => void
+  /** The Incoming Train's departure horn — a two-tone honk. */
+  trainHorn: () => void
   /** 0..1, applied to everything. */
   setVolume: (volume: number) => void
   /** Releases the audio hardware. */
@@ -156,6 +158,49 @@ export function createSoundEngine(): SoundEngine {
       // Let the node graph collect itself once the voice has finished.
       osc.onended = () => {
         osc.disconnect()
+        envelope.disconnect()
+      }
+    },
+
+    trainHorn: () => {
+      // Same muted/inactive guard as `blip` — no point scheduling a voice
+      // that would play silently.
+      if (!bedWanted || context.state !== 'running') return
+
+      const now = context.currentTime
+      const duration = 0.5
+
+      // A two-tone diesel-horn chord (a minor third), through a lowpass so
+      // the raw sawtooth reads as a brassy honk rather than a buzz.
+      const envelope = context.createGain()
+      envelope.gain.setValueAtTime(0, now)
+      envelope.gain.linearRampToValueAtTime(0.4, now + 0.04)
+      envelope.gain.setValueAtTime(0.4, now + duration - 0.16)
+      envelope.gain.exponentialRampToValueAtTime(0.0001, now + duration)
+
+      const hornFilter = context.createBiquadFilter()
+      hornFilter.type = 'lowpass'
+      hornFilter.frequency.value = 1500
+      hornFilter.Q.value = 0.6
+      hornFilter.connect(envelope)
+      envelope.connect(master)
+
+      const oscillators = [233.08, 277.18].map((hz) => {
+        const osc = context.createOscillator()
+        osc.type = 'sawtooth'
+        osc.frequency.setValueAtTime(hz, now)
+        const voice = context.createGain()
+        voice.gain.value = 0.45
+        osc.connect(voice)
+        voice.connect(hornFilter)
+        osc.start(now)
+        osc.stop(now + duration + 0.02)
+        return osc
+      })
+
+      oscillators[oscillators.length - 1].onended = () => {
+        oscillators.forEach((osc) => osc.disconnect())
+        hornFilter.disconnect()
         envelope.disconnect()
       }
     },

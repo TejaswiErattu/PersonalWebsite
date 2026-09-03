@@ -125,7 +125,18 @@ export default function GameCanvas() {
     handleRef.current?.triggerInteract()
   }, [])
 
-  /** Dispatches a contextual button press to the matching `GameHandle` stub. */
+  /**
+   * Dispatches a contextual button press to the matching `GameHandle` stub,
+   * then hands keyboard focus back to the canvas.
+   *
+   * Clicking an HTML `<button>` focuses that button, same as any other DOM
+   * element — but Kaplay's arrow-key/WASD listeners are bound to the canvas,
+   * so without this a visitor who just clicked "Send Mail" (or any other
+   * contextual action) would find the arrow keys dead until they clicked the
+   * canvas itself to refocus it. The button stays visible and enabled again
+   * after its cooldown, so this doesn't lose anything a keyboard user needs —
+   * it just returns them to the surface the movement keys actually target.
+   */
   const handleContextualTrigger = useCallback((action: ContextualActionId) => {
     switch (action) {
       case 'incomingTrain':
@@ -141,6 +152,7 @@ export default function GameCanvas() {
         handleRef.current?.triggerSendMail()
         break
     }
+    canvasRef.current?.focus()
   }, [])
 
   return (
