@@ -1,122 +1,109 @@
-# Phase 16: Village Map & Background Redesign
+# Repo Swap & Build Fix
 
 ## Summary
 
-Phase 16 fixes the village's visual and functional layout by redesigning the background, paths, collision access, and spawn position. The core 3×3 building grid is preserved intact, but the space between and around them is now navigable, clear, and visually cohesive.
+This session swapped the contents of two GitHub repositories and fixed a critical build error that was preventing the new pixel-portfolio village project from deploying to production.
 
-All 76 reachability checks pass (every window, signpost, and Plant More tile is standable and reachable from the new spawn). Both `npm run build` and `npm run lint` pass cleanly.
+**Status**: ✅ Build fixed and pushed; Vercel deployment now working (pending env var configuration)
 
-## Problem
+## What Happened
 
-The original village had:
-1. **Oversized flat path blocks** — tan rectangles divided the village into zones without reading as a walkable landscape
-2. **Solid greenhouse barrier** — a 9-tile solid dark-green tree wall above the greenhouse made the entire building appear walled off
-3. **Train tracks into water** — the rail sprite ran visibly into the water/tree border at both edges
-4. **Dead decorative box** — a stale "feeding basket" baked into the farm facade with a comment saying "the feeding interaction is a later phase" (it's actually here via Drop Feed)
-5. **Spawn in plaza** — the player started in the middle of a path intersection, not near a specific location
+### 1. Repository Swap
 
-## Changes
+**Before:**
+- `PersonalWebsite` (repo1) → old Next.js portfolio (what recruiters have seen)
+- `TempPersonalWebsite` (repo2) → this pixel-portfolio village project
 
-### Map Redesign (`src/game/village.ts`)
+**After:**
+- `PersonalWebsite` → **this pixel-portfolio village project** (now live)
+- `TempPersonalWebsite` → backup of the old Next.js portfolio (full history preserved)
 
-**New tile symbols:**
-- `v` (flowerbed): non-solid, decorative walkable tiles that border every main path and surround the greenhouse
-- `b` (bush): non-solid, decorative landscaping that softens hard corners and fills the greenhouse's old tree wall
+**How it was done:**
+1. Cloned repo1 (`PersonalWebsite`) as a backup to `/tmp/repo-swap-backup/repo1-backup`
+2. Force-pushed repo1's content into repo2 (`TempPersonalWebsite`) at commit `8d57354`
+3. Force-pushed this project's content into repo1 (`PersonalWebsite`) at commit `6bd1cad`
+4. Updated local `origin` remote to point to `PersonalWebsite` (so future pushes go there)
 
-**Path narrowing:** The two main north-south corridors shrunk from 5 tiles wide to 3 tiles (the middle three). Flanking `v` tiles on both sides break up the flat expanse.
+**Git verification:**
+```
+PersonalWebsite:      6bd1cad (Phase 16 transfer notes)
+TempPersonalWebsite:  8d57354 (old Next.js site's last commit)
+```
 
-**Greenhouse surrounds:** The solid 9-wide tree wall (row 24, cols 5–13) replaced with:
-- Row 23: `.T.v.v.T.` (two corner trees, open gaps, two bushes)
-- Row 24: `T.b.v.b.T` (corner trees, opening, and soft landscaping)
-- Rows 25–28: bushes (`b`) at cols 5 and 13 instead of solid trees (`T`)
+### 2. Build Error Fix
 
-**Spawn moved:** From the center plaza (row 21, col 23) to a clear grass tile directly south of About Me cottage (row 9, col 8).
+**The problem:**
+When Vercel tried to build the newly-pushed PersonalWebsite, it failed with:
+```
+src/game/createGame.ts(3,10): error TS2305: Module '"../audio/audio"' has no exported member 'playTrainHorn'.
+```
 
-### Visual Assets (`src/game/worldSprites.ts`)
+**Root cause:**
+A previous session added `playTrainHorn()` to `src/audio/audio.ts` and `src/audio/engine.ts`, plus related fixes in `src/components/GameCanvas.tsx` and `src/seo/site.ts`, but these four files were **never committed** — they only existed in the local working tree. When the repo was swapped and Vercel cloned it, those files were missing.
 
-**New sprites (16px tiles):**
-- `createPathTileSprite()` — worn stone with a 2×2 block pattern and mortar lines (subtle texture, not a solid rectangle)
-- `createBushSprite()` — low mound of foliage in three shades of green
-- `createSmokePuffSprite()` — soft grey cloud for the train's smokestack
-- `trainSmokestackMouth()` — locator for smoke spawn (matching `postOfficeChimneyMouth` pattern)
+**The fix (commit `9f1d003`):**
+Committed all four pending files:
+- `src/audio/audio.ts` — exports `playTrainHorn()` function
+- `src/audio/engine.ts` — implements `trainHorn()` in the sound engine (two-tone diesel horn via Web Audio)
+- `src/components/GameCanvas.tsx` — refocuses canvas after contextual actions so keyboard movement keeps working
+- `src/seo/site.ts` — now reads `VITE_SITE_ORIGIN` env var instead of hardcoded domain
 
-**Removed:** Dead decorative farm basket from `createFarmSprite()`.
+**Build now passes:**
+```
+✓ npm run build (all 17 routes prerender cleanly)
+✓ npm run lint (0 new warnings)
+```
 
-### Game Logic (`src/game/createGame.ts`)
+## Next Steps: Configure Production URL
 
-**New constants:**
-- `RAIL_MARGIN_TILES = 3` — width of the water/tree border on each side
-- `RAIL_MARGIN = RAIL_MARGIN_TILES * TILE_SIZE` — pixel margin
-- `RAIL_WIDTH = WORLD_WIDTH - RAIL_MARGIN * 2` — track length, confined to green land
+The build is fixed, but **canonical URLs, Open Graph tags, sitemap.xml, and JSON-LD will all say `localhost:5173`** in production until you set an environment variable in Vercel.
 
-**Updated train bounds:**
-- Train entry: `RAIL_MARGIN + TRAIN_WIDTH / 2` (not `−TRAIN_WIDTH`)
-- Train exit: `WORLD_WIDTH − RAIL_MARGIN − TRAIN_WIDTH / 2` (not `WORLD_WIDTH + TRAIN_WIDTH`)
-- Both ensure the train sprite's centre (`anchor('center')`) never overhangs into water
+**Action required:**
+1. Go to **Vercel dashboard** → **PersonalWebsite project** → **Settings** → **Environment Variables**
+2. Add a new variable:
+   - **Key:** `VITE_SITE_ORIGIN`
+   - **Value:** your Vercel deployment URL (e.g., `https://personal-website-abc123.vercel.app`)
+   - **Type:** Secret or Config (doesn't matter for this URL)
+3. Click **Save**
+4. Vercel will automatically redeploy with the correct domain
 
-**Tile rendering in `buildLevel()`:**
-- New `GROUND_SPRITE_SYMBOLS` map: paths (`,` and `P`) render via `createPathTileSprite()`, bushes (`b`) via `createBushSprite()`, flowerbeds (`v`) via a fixed flower variant
-- Flat colour fallback preserved for water, trees, and building footprints
+**Find your URL:**
+- Deployments tab in Vercel shows the live URL
+- Or check your custom domain if you set one
 
-**Sprites loaded:**
-- `path`, `bush`, `smokePuff` added to sprite registry
+Once set, all absolute URLs will point to the production domain instead of localhost, and your portfolio will be properly indexed by search engines and social media crawlers.
+
+## Files Changed This Session
+
+**Committed:**
+- `src/audio/audio.ts` — train horn export
+- `src/audio/engine.ts` — train horn implementation
+- `src/components/GameCanvas.tsx` — canvas focus preservation
+- `src/seo/site.ts` — env-based site origin
+
+**Git commits:**
+- `6bd1cad` — Phase 16 transfer notes (from prior session)
+- `9f1d003` — Fix build: commit train-horn audio and env-based SITE_ORIGIN
 
 ## Verification
 
-**Standalone reachability check** (run via `npx tsx scripts/tmp-reachability-check.ts`, then deleted):
-- BFS from new spawn across all walkable tiles
-- Checked all 27 station/door triggers (3 per building × 9 locations)
-- Checked all 9 signposts (one per location)
-- Checked all 15 fixed Plant More greenhouse tiles
-- **Result: 76/76 checks passed** — every point is standable and reachable
+**Local build:** ✅ Clean  
+**Local lint:** ✅ Clean (0 new warnings)  
+**Remote repo state:** ✅ Both repos point to correct commits  
+**Local origin:** ✅ Points to PersonalWebsite  
+**Vercel build:** ✅ Now succeeds (pending env var for correct domain)
 
-**Build and lint:**
-- `npm run build`: ✓ Clean, all 17 routes prerender without error
-- `npm run lint`: ✓ 0 new warnings (3 pre-existing documented warnings in `router.tsx` ×2, `sections.tsx` ×1)
+## What's Live Now
 
-## Files Changed
+The **PersonalWebsite** Vercel deployment is now building from this pixel-portfolio village project. Visitors see:
+- The interactive Kaplay village at `/play`
+- Classic portfolio view at `/about`, `/experience`, etc.
+- All Phase 1–16 features (train, farm, mail, suggestions, plant interactions)
 
-- `src/game/village.ts` — map redesign, new tile symbols
-- `src/game/worldSprites.ts` — new sprite functions, removed farm basket
-- `src/game/createGame.ts` — train margin constants, rail confinement, ground sprite rendering
-
-## What's Preserved
-
-- 3×3 building grid (all symbols `A`–`X` unchanged in footprint)
-- Player movement, collision detection (same `canStandAt` math)
-- Camera behaviour, zoom logic
-- Interaction triggers for all windows/doors/signposts (exact geometry matches `buildBuildings` formula)
-- Plant More fixed tile list and mechanics
-- All other gameplay (train, feed, mail, plant, suggestion box, etc.)
-- Classic view routes, prerendering, SEO
-
-## What Was NOT Addressed (Out of Scope)
-
-- Visual feedback in the browser (environment limitation prevented screenshots)
-- Ambient flower count (26 existing flowers preserved; not bumped for this phase)
-- Music, audio, or reduced-motion logic (pre-existing, unmodified)
-- Portfolio content, overlays, or narrative
-
-## Next Steps
-
-A manual browser verification is recommended to confirm:
-- Stone-path texture reads well at 2× zoom
-- Bush and flowerbed tiles integrate naturally with grass and buildings
-- Greenhouse approaches feel open on all sides
-- Train animation stays within green land
-- Overall village reads as a cohesive, walkable space rather than flat zones divided by tan rectangles
+The old Next.js portfolio is safely backed up in **TempPersonalWebsite** if you ever need to reference it.
 
 ## Status
 
-✅ **Phase 16 Complete**
+✅ **Complete** — Repository swap successful, build error fixed, deployment working
 
-All acceptance criteria met:
-- Map is walkable from spawn to every location
-- Background/paths are visually intentional, not oversized flat blocks
-- Greenhouse is approachable from every side
-- Train stays on green land
-- Spawn is on clear ground near a building
-- Build and lint pass cleanly
-- No new warnings introduced
-
-Commit: `a9b226b` — "Phase 16: Fix village map, background, paths, and spawn position"
+**Next step:** Set `VITE_SITE_ORIGIN` env var in Vercel so canonical URLs point to the live domain.
