@@ -14,6 +14,7 @@
  *   ,  stone path (walkable) — narrow 3-tile-wide walkways, not wide plazas
  *   v  flowerbed (walkable) — borders every path and softens the greenhouse yard
  *   b  bush (walkable) — low landscaping, never blocks a route
+ *   k  planting bed (walkable) — tended soil rows, greenhouse yard only
  *   P  player spawn point (walkable, renders as path)
  *   ~  water (solid)
  *   T  tree (solid)
@@ -67,8 +68,8 @@ export const MAP: string[] = [
   '~~T......4....v,,,v....5....v,,,v....6......T~~',
   '~~T...........v,,,v.........v,,,v...........T~~',
   '~~T...........v,,,v.........v,,,v...........T~~',
-  '~~T...T.v.v.T.v,,,v.........v,,,v...........T~~',
-  '~~TT.T.b.v.b.Tv,,,vFFFFFFFFFv,,,vXXXXXXXXX..T~~',
+  '~~T.bvvb.bvvbTv,,,v.........v,,,v...........T~~',
+  '~~T..bkkkkkkkbv,,,vFFFFFFFFFv,,,vXXXXXXXXX..T~~',
   '~~T..bGGGGGGGbv,,,vFFFFFFFFFv,,,vXXXXXXXXX..T~~',
   '~~TT.bGGGGGGGbv,,,vFFFFFFFFFv,,,vXXXXXXXXX..T~~',
   '~~T..bGGGGGGGbv,,,vFFFFFFFFFv,,,vXXXXXXXXX..T~~',
@@ -106,6 +107,7 @@ export const TILES: Record<string, TileSpec> = {
   // sprite ever fails to load.
   v: { color: '#e88ec0', solid: false, label: 'Flowerbed' },
   b: { color: '#3f7a3f', solid: false, label: 'Bush' },
+  k: { color: '#6b4a30', solid: false, label: 'Planting Bed' },
   // Signposts sit in the open street bands or yard margins, never in a
   // single-tile-wide gap, so there is no need for them to stay solid the way
   // the old map's narrow-gap signposts did — but keeping them non-solid costs

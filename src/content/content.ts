@@ -44,6 +44,14 @@ export interface About {
   paragraphs: string[]
   quickFacts: { label: string; value: string }[]
   highlights: string[]
+  /**
+   * Short welcome message shown in the About Me Flower Cottage's
+   * Introduction window (and its classic-view equivalent). Deliberately
+   * separate from `paragraphs`: this is a village-exploration greeting, not
+   * a roles/skills summary, so it stays short and does not repeat content
+   * that already lives on the Current Roles station or the Education window.
+   */
+  introduction: string[]
 }
 
 /**
@@ -243,6 +251,25 @@ const PALANA_BULLETS = [
   'Ran manual penetration testing with Burp Suite against API and WebSocket endpoints to assess authorization and data-exposure risk',
 ]
 
+/**
+ * A short, general summary of the Palana role for the Current Roles Train
+ * Station — deliberately separate from `PALANA_BULLETS` (kept intact for the
+ * Security section, which is a detailed technical profile out of this
+ * simplification's scope). No detailed duties, metrics, or confidential
+ * specifics; just what Palana is and what Tejaswi does there.
+ */
+const PALANA_ROLE_SUMMARY = [
+  'Palana is building UW Night Ride, a campus safety app for University of Washington students.',
+  'Tejaswi works there as a Security Engineer, helping threat-model the app and test it for security issues before release.',
+  'More detail about this role will be added here once the app is published on Google Play.',
+]
+
+/** A short, general summary of the AHF role for the Current Roles Train Station. */
+const AHF_ROLE_SUMMARY = [
+  'Accountability & Hopeful Fridays is an organization Tejaswi supports as Software Engineering Lead.',
+  'She helps plan and organize its technical tools and infrastructure.',
+]
+
 /* ------------------------------------------------------------------ */
 /* Content                                                             */
 /* ------------------------------------------------------------------ */
@@ -294,6 +321,11 @@ export const content: PortfolioContent = {
       'Taught coding to 60+ elementary students',
       'Led 5-person cross-functional engineering team',
     ],
+    introduction: [
+      'Welcome to my portfolio village!',
+      'Take a look around and explore the different buildings — there are a few interactive features tucked throughout, so feel free to try them out.',
+      'When you are ready to leave the village, switch to Classic View to explore the non-village version of the portfolio.',
+    ],
   },
 
   projects: [
@@ -302,18 +334,17 @@ export const content: PortfolioContent = {
       title: 'Findar — AR Object Finder (iOS)',
       period: 'Feb 2026',
       blurb:
-        'Augmented reality-powered iOS app that passively remembers where objects were last seen using LiDAR depth sensing, YOLOv8 object detection, and voice commands.',
+        'An augmented reality iOS app that helps you find lost objects around your home — just say what you\'re looking for, and it guides you to it using your camera and LiDAR sensor.',
       tech: ['Swift', 'ARKit', 'CoreML', 'YOLOv8', 'LiDAR', 'Vision', 'SwiftUI', 'Speech'],
       built: [
-        'Built native iOS augmented reality app using ARKit with LiDAR depth sensing for real-time 3D spatial awareness, detecting 80+ object categories in real time',
-        'Processed raw LiDAR depth buffers (CVPixelBuffer) to compute object distance and guide users to lost items via 5-zone directional voice navigation',
-        'Engineered a concurrent on-device detection pipeline (Vision, background queues, frame-skipping) sustaining 60fps while running YOLOv8 inference every 8th frame',
-        'Built safety and voice systems: sub-30cm obstacle detection with haptic alerts, and natural-language command parsing (SFSpeechRecognizer) for hands-free searches like "find my keys"',
+        'Detects everyday objects in real time using the camera and on-device object detection.',
+        'Uses the LiDAR sensor to judge distance and guide you toward the object with spoken directions.',
+        'Understands natural voice commands like "find my keys" and gives spoken and haptic feedback as you get close.',
       ],
       impact:
-        'Real-time object detection with LiDAR depth, voice-guided navigation, and spatial awareness — built in 24 hours',
+        'A working prototype demonstrating real-time object detection, LiDAR-based guidance, and voice interaction — built in 24 hours.',
       learned:
-        'Augmented reality apps demand extreme attention to frame timing and threading. Running YOLO inference, depth mapping, and speech recognition concurrently on-device taught me how to architect real-time pipelines without blocking the main thread.',
+        'Building an app that combines computer vision, depth sensing, and voice recognition taught me how to design real-time systems that stay responsive without blocking the interface.',
       links: [
         { label: 'View Code', href: 'https://github.com/TejaswiErattu/findar' },
         { label: 'Read the full write-up', href: '/projects/findar' },
@@ -322,238 +353,49 @@ export const content: PortfolioContent = {
       detail: {
         badges: ['Built in 24 hours'],
         intro:
-          `An augmented reality-powered iOS app that helps you find lost objects without tags, ` +
-          `trackers, or setup. Just say "find my keys" and Findar guides you to them using LiDAR ` +
-          `depth sensing, YOLOv8 object detection, and voice navigation.`,
+          `An augmented reality iOS app that helps you find lost objects without tags, trackers, ` +
+          `or setup. Just say "find my keys" and Findar guides you to them using your camera, ` +
+          `LiDAR depth sensing, and voice.`,
         blocks: [
           {
             kind: 'video',
             src: '/videos/findar-demo.mp4',
             poster: '/videos/findar-poster.jpg',
-            caption:
-              'Findar in action — voice command, real-time object detection with YOLOv8, and LiDAR-guided navigation.',
+            caption: 'Findar in action — voice command, real-time object detection, and guided navigation.',
           },
           {
             kind: 'prose',
-            heading: 'The Problem',
+            heading: 'Why I Built It',
             paragraphs: [
-              `The average person spends 2.5 days per year looking for lost items. Existing ` +
-                `solutions like AirTags and Tile require you to pre-tag every object — which means ` +
-                `you can only find things you already planned to lose.`,
-              `There's no solution for the spontaneous "where did I put my glasses?" moment. I ` +
-                `wanted something that works passively, with zero setup, using hardware people ` +
+              `Existing solutions like AirTags and Tile require you to pre-tag every object, so they ` +
+                `can only find things you already planned to lose. There's no solution for the ` +
+                `spontaneous "where did I put my glasses?" moment.`,
+              `I wanted something that works passively, with zero setup, using hardware people ` +
                 `already own.`,
             ],
           },
           {
-            kind: 'list',
-            heading: 'Current Limitations',
-            tone: 'negative',
-            items: [
-              'AirTags/Tile require pre-tagging every object',
-              "Can't find items you forgot to tag",
-              'No spatial awareness — just "nearby" or "not nearby"',
-              'No voice-guided navigation to the object',
-            ],
-          },
-          {
-            kind: 'steps',
-            heading: 'How Findar Works',
-            blurb:
-              `Findar connects a camera, LiDAR sensor, and on-device artificial intelligence to ` +
-              `build a real-time 3D understanding of your space. Just point your phone and speak — ` +
-              `it does the rest.`,
-            steps: [
-              {
-                title: 'Voice Command',
-                body: `Say "find my keys", "where's my phone", or "look for my laptop". The Speech framework parses natural language with debouncing, noise filtering, and synonym matching.`,
-              },
-              {
-                title: 'Object Detection (YOLOv8)',
-                body: 'Every 8th augmented reality frame is fed through a YOLOv8n CoreML model that detects 80+ object categories in real time. Bounding boxes are drawn as overlays with confidence scores.',
-              },
-              {
-                title: 'LiDAR Depth Mapping',
-                body: 'The LiDAR sensor provides smoothed scene depth for every detected object. Findar calculates distance in feet and detects obstacles within 30cm for safety warnings.',
-              },
-              {
-                title: 'Voice + Haptic Navigation',
-                body: `"Found it! To your left, about 4 feet away." Findar speaks directions, provides haptic feedback on detection, and auto-confirms when the object is within arm's reach for 2 seconds.`,
-              },
-            ],
-          },
-          {
             kind: 'cards',
-            heading: 'Key Features',
+            heading: 'Highlights',
             cards: [
               {
                 title: 'Natural Voice Search',
-                body: `Understands "find my phone", "where are my keys", "look for the remote" — with filler word filtering and synonym matching for 80+ objects.`,
+                body: 'Understands everyday phrasing like "find my phone" or "where are my keys."',
               },
               {
                 title: 'Real-Time Detection',
-                body: 'YOLOv8n runs on every 8th AR frame via CoreML. Detections above 50% confidence get bounding box overlays with labels and percentages.',
+                body: 'Spots common objects on the fly using on-device object detection.',
               },
               {
-                title: 'Directional Guidance',
-                body: '5-zone direction system: far left, left, straight ahead, right, far right — with distance in feet computed from LiDAR depth buffer.',
-              },
-              {
-                title: 'Obstacle Safety',
-                body: 'LiDAR scans the center of the frame for obstacles under 30cm. Triggers haptic feedback and a spoken warning naming the obstacle if recognized.',
-              },
-              {
-                title: 'Haptic Feedback',
-                body: `Three intensity levels: light (scanning), medium (object found), success (object reached). Auto-confirms retrieval when within arm's reach for 2 seconds.`,
-              },
-              {
-                title: 'Premium Voice Output',
-                body: 'Prioritizes premium Siri voices (Zoe, Ava) for natural speech. Rate, pitch, and volume tuned for clarity during active search.',
+                title: 'Guided Navigation',
+                body: 'Speaks directions and gives haptic feedback as you get closer to the object.',
               },
             ],
-          },
-          {
-            kind: 'columns',
-            heading: 'Architecture',
-            blurb:
-              'Everything runs on-device — no cloud, no network, no latency. ARKit provides the camera feed and LiDAR depth. CoreML runs YOLOv8. Speech framework handles voice I/O. All three pipelines run concurrently with careful frame scheduling.',
-            columns: [
-              {
-                title: 'Perception',
-                items: [
-                  'ARKit ARWorldTrackingConfiguration',
-                  'LiDAR smoothedSceneDepth',
-                  'YOLOv8n via VNCoreMLRequest',
-                  'Frame skip (every 8th) for perf',
-                ],
-              },
-              {
-                title: 'Intelligence',
-                items: [
-                  'Synonym matching (phone → cell phone)',
-                  'Primary-word extraction from commands',
-                  'Depth-based distance estimation',
-                  '5-zone directional classification',
-                ],
-              },
-              {
-                title: 'Interaction',
-                items: [
-                  'SFSpeechRecognizer with debouncing',
-                  'AVSpeechSynthesizer (premium voices)',
-                  '3-level UIImpactFeedbackGenerator',
-                  'Auto-restart listening loop',
-                ],
-              },
-            ],
-          },
-          {
-            kind: 'code',
-            heading: 'The Real-Time Pipeline',
-            blurb:
-              "Every augmented reality frame triggers a cascade of processing — but only what's needed. The system is designed to never block the main thread.",
-            language: 'text',
-            source: `ARFrame → every frame
-
-├─ checkSafety() → LiDAR center scan → obstacle warning (every 6s)
-
-├─ frameSkip → only process every 8th frame
-
-├─ runDetection() → VNImageRequestHandler → YOLOv8n (background queue)
-
-│   └─ filter detections → confidence > 50%
-
-├─ processDetections() → match target via synonyms
-
-│   ├─ found → getDistance() → describeDirection() → speak + haptic
-
-│   └─ not found → 8s timeout → "Keep looking around"
-
-└─ arm's reach check → < 0.5m for 2s → "Nice, got it!"`,
           },
           {
             kind: 'chips',
             heading: 'Tech Stack',
-            items: [
-              'Swift',
-              'SwiftUI',
-              'ARKit',
-              'RealityKit',
-              'CoreML',
-              'YOLOv8n',
-              'Vision',
-              'LiDAR',
-              'Speech Framework',
-              'AVSpeechSynthesizer',
-              'UIKit Haptics',
-              'Xcode',
-              'iOS 17+',
-            ],
-          },
-          {
-            kind: 'steps',
-            heading: 'Smart Object Matching',
-            blurb: `Users say things naturally — "find my phone", "where's the TV remote", "help me find my bag". The system handles this through a multi-pass matching pipeline:`,
-            steps: [
-              {
-                title: 'Voice Parsing',
-                body: `Recognizes patterns like "find my ___", "where is the ___", "look for ___". Filters filler words (um, uh, like) and extracts the meaningful 1-2 word object name.`,
-              },
-              {
-                title: 'Exact Match',
-                body: `First tries exact label match from YOLO detections. If the user says "laptop" and YOLO detects "laptop", it's an instant match.`,
-              },
-              {
-                title: 'Synonym Lookup',
-                body: 'Built-in synonym map: phone ↔ cell phone, laptop ↔ computer, couch ↔ sofa, tv ↔ monitor, bag ↔ backpack/handbag/suitcase, and more.',
-              },
-              {
-                title: 'Fuzzy Match',
-                body: `Partial string matching and primary-word extraction. "water bottle" matches "bottle", "TV remote" matches "remote".`,
-              },
-            ],
-          },
-          {
-            kind: 'cards',
-            heading: 'What I Learned',
-            cards: [
-              {
-                title: 'Real-Time Pipeline Design',
-                body: 'Running YOLO inference, LiDAR depth reads, and speech recognition concurrently on a phone. Frame skipping, background queues, and debouncing are critical to keeping 60fps smooth.',
-              },
-              {
-                title: 'On-Device Machine Learning',
-                body: 'Converting YOLOv8n to .mlmodelc for CoreML, understanding VNCoreMLRequest threading, and tuning confidence thresholds for real-world accuracy vs. false positives.',
-              },
-              {
-                title: 'LiDAR Depth Buffers',
-                body: 'Working with raw CVPixelBuffer depth maps — lock addresses, calculate byte offsets, and sample Float32 values. The depth-to-bounding-box mapping was the trickiest part.',
-              },
-              {
-                title: 'Rapid Prototyping',
-                body: 'Scoping an ambitious augmented reality project to 24 hours. I cut temporal memory and multi-room tracking to ship a polished single-room prototype.',
-              },
-            ],
-          },
-          {
-            kind: 'cards',
-            heading: 'Future Vision',
-            blurb:
-              'Findar is designed to be plugged into systems people already use — Alexa, Ring cameras, smart home hubs. The long-term vision:',
-            cards: [
-              {
-                title: 'Temporal Memory',
-                body: `Remember where objects were last seen over hours and days — "Your keys were on the kitchen counter 20 minutes ago."`,
-              },
-              {
-                title: 'Multi-Camera',
-                body: 'Connect Ring cameras and security systems for whole-home coverage without needing to walk around scanning.',
-              },
-              {
-                title: 'Alexa Integration',
-                body: `"Alexa, where are my glasses?" — and your nearest Echo Show displays the location on a floor map.`,
-              },
-            ],
+            items: ['Swift', 'SwiftUI', 'ARKit', 'CoreML', 'YOLOv8n', 'Vision', 'LiDAR', 'Speech Framework'],
           },
         ],
       },
@@ -563,61 +405,87 @@ export const content: PortfolioContent = {
       title: 'GitHub Extension (VS Code)',
       period: 'Jan 2026 – Jun 2026',
       blurb:
-        'TypeScript VS Code extension that puts a safety layer in front of Git: secret scanning, risk classification, and preview-and-confirm gates for destructive commands.',
-      tech: ['TypeScript', 'VS Code Extension API', 'Node.js', 'Git CLI', 'Webview API'],
+        'A VS Code extension that adds a safety layer in front of Git — scanning for exposed secrets and adding a preview-and-confirm step before risky Git commands run.',
+      tech: ['TypeScript', 'VS Code Extension API', 'Node.js', 'Git CLI'],
       built: [
-        'Built a pre-commit secret detection pipeline (TypeScript, regex) scanning staged diffs across 6 credential pattern types, blocking exposed secrets before they reached version control',
-        'Designed a real-time risk classification engine (Git CLI, TypeScript) that scored every Git action low/medium/high risk, adding confirmation gates to previously unguarded destructive operations',
-        'Implemented a command preview/confirmation flow across 6 core Git workflows (commit, push, pull, branch, staging, sync) using the VS Code Extension API, eliminating blind execution of AI-generated Git commands',
-        'Developed a branch overlap detection system (Git diff parsing) that cross-referenced file-level changes across active branches for teams of 2-10, flagging conflicts before merge',
+        'Scans staged changes for exposed secrets before they reach version control.',
+        'Flags risky Git actions and shows a preview before they run, instead of executing them blind.',
+        'Helps small student teams spot overlapping changes across branches before merging.',
       ],
-      impact:
-        'Node.js child_process drives direct Git CLI integration across a 9-stage pipeline (parsing, risk analysis, safe execution) for student teams of 2-10',
+      impact: 'A safety net for student teams using Git, catching risky or destructive commands before they run.',
       learned:
-        'Guardrails only work if they are faster than the unsafe path. Every gate had to justify the extra keystroke, which pushed me toward previewing intent rather than blocking actions outright.',
+        'Guardrails only work if they are faster than the unsafe path — I focused on previewing intent rather than just blocking actions outright.',
       links: [{ label: 'View Code', href: GITHUB }],
       locationId: 'developer-tools-workshop',
+      detail: {
+        intro:
+          'A VS Code extension that adds a safety layer in front of Git — scanning for exposed secrets and adding a preview-and-confirm step before risky Git commands run.',
+        blocks: [
+          { kind: 'prose', heading: 'Media', paragraphs: ['Media coming soon.'] },
+          {
+            kind: 'cards',
+            heading: 'Highlights',
+            cards: [
+              { title: 'Secret Scanning', body: 'Catches exposed credentials before they reach version control.' },
+              { title: 'Risk Preview', body: 'Shows a confirmation step before risky Git actions run.' },
+              { title: 'Team-Friendly', body: 'Built with small student teams working on shared branches in mind.' },
+            ],
+          },
+        ],
+      },
     },
     {
       id: 'cyber-study-tracker',
       title: 'Cyber Study Tracker',
       period: 'Jun 2025 – Sept 2025',
       blurb:
-        'A client-side dashboard for tracking a self-directed cybersecurity study plan — a visual calendar, progress metrics, and a rollover engine that reflows missed tasks forward.',
-      tech: ['HTML', 'CSS', 'JavaScript', 'Firebase', 'Web Audio API', 'ExcelJS', 'FileSaver.js'],
+        'A personal dashboard for tracking a self-directed cybersecurity study plan — a visual calendar and progress tracker that reschedules missed tasks automatically.',
+      tech: ['HTML', 'CSS', 'JavaScript', 'Firebase'],
       built: [
-        'Built a fully client-side single-page dashboard (vanilla HTML, CSS, and JavaScript) with a visual calendar tracker, progress dashboard, and resource reference list',
-        'Designed a rollover scheduling engine that moves incomplete tasks forward and caps scheduled hours per day at a configurable daily maximum',
-        'Built a multi-sheet Excel/CSV export engine (ExcelJS, FileSaver.js, lazy-loaded from a CDN) covering the schedule, completed tasks, certifications, and settings',
-        'Added a toggle to include or exclude a weekly project block, which reflows the schedule when switched off',
-        'Used the Web Audio API to play small retro synth sound effects for clicks, success, warning, and reset events',
+        'A visual calendar and progress dashboard for a self-directed study plan.',
+        'Automatically reschedules missed tasks so the plan stays realistic.',
+        'Exports the schedule and progress to a spreadsheet for easy reference.',
       ],
-      impact:
-        'A personal tool for tracking and adapting a self-directed study plan across certifications and coursework.',
+      impact: 'A personal tool for tracking and adapting a self-directed study plan across certifications and coursework.',
       learned:
-        'Built to track and reschedule a personal cybersecurity study plan — including Security+, AWS, PortSwigger, and coding practice — without a backend beyond Firebase sync.',
+        'Built to track and reschedule a personal cybersecurity study plan without needing a full backend.',
       links: [],
       locationId: 'developer-tools-workshop',
       contentTodo:
         'TODO: replace with the final project description and demo video once provided.',
+      detail: {
+        intro:
+          'A personal dashboard for tracking a self-directed cybersecurity study plan — a visual calendar and progress tracker that reschedules missed tasks automatically.',
+        blocks: [
+          { kind: 'prose', heading: 'Media', paragraphs: ['Media coming soon.'] },
+          {
+            kind: 'cards',
+            heading: 'Highlights',
+            cards: [
+              { title: 'Visual Calendar', body: 'Tracks study tasks across certifications and coursework at a glance.' },
+              { title: 'Auto Rescheduling', body: 'Moves missed tasks forward instead of letting the plan fall apart.' },
+              { title: 'Exportable', body: 'Progress and schedule can be exported for easy reference.' },
+            ],
+          },
+        ],
+      },
     },
     {
       id: 'unearthed',
       title: 'Unearthed Dinos FIRST LEGO League Website',
       period: '',
       blurb:
-        'Full-stack team website for a FIRST LEGO League robotics team featuring an AI-powered chatbot, interactive timeline, team profiles, and community outreach showcase.',
-      tech: ['React', 'Vite', 'Tailwind CSS', 'Express.js', 'OpenAI API', 'Framer Motion', 'Vercel'],
+        'A team website for a FIRST LEGO League robotics team, built to give judges, sponsors, and families one place to see the team\'s work — with an AI chatbot to answer questions.',
+      tech: ['React', 'Vite', 'Tailwind CSS', 'Express.js', 'OpenAI API'],
       built: [
-        'Built full-stack React website with Express.js backend, deployed on Vercel with serverless functions',
-        'Created AI-powered chatbot using OpenAI GPT-4o-mini with local site search fallback and optional web search via Google Custom Search Engine',
-        'Designed archaeology-themed user interface with Framer Motion animations, responsive layouts, and team member profiles',
-        'Implemented interactive timeline, outreach showcase, robot design documentation, and awards gallery',
+        'A single site covering team profiles, robot design, and community outreach.',
+        'An AI chatbot that answers questions about the team and about FIRST LEGO League itself.',
+        'A timeline and awards gallery showcasing the team\'s season.',
       ],
       impact:
-        'Live team website with AI chatbot serving FIRST LEGO League knowledge, team info, and web search — used by team members, parents, and judges',
+        'A live team website used by team members, parents, and judges to learn about the Unearthed Dinos.',
       learned:
-        'Building for a team of kids means the user interface needs to be instantly understandable. The chatbot taught me how to layer search — try local content first, then offer web search only with user consent.',
+        'Building for a team of kids meant the interface needed to be instantly understandable. The chatbot taught me how to layer search — try local content first, then offer web search only with consent.',
       links: [
         { label: 'View Code', href: 'https://github.com/TejaswiErattu/UnearthedFLLWebsite' },
         { label: 'Live Demo', href: 'https://unearthedfllwebsite27820.vercel.app' },
@@ -627,9 +495,9 @@ export const content: PortfolioContent = {
       detail: {
         eyebrow: 'FIRST LEGO League',
         intro:
-          `A full-stack team website for the "Unearthed Dinos" FIRST LEGO League robotics team — ` +
-          `featuring an AI-powered chatbot, archaeology-themed design, interactive timeline, and ` +
-          `community outreach showcase.`,
+          `A team website for the "Unearthed Dinos" FIRST LEGO League robotics team, built to give ` +
+          `judges, sponsors, and families one place to see the team's work — with an AI chatbot to ` +
+          `answer questions.`,
         blocks: [
           {
             kind: 'video',
@@ -640,145 +508,28 @@ export const content: PortfolioContent = {
           },
           {
             kind: 'prose',
-            heading: 'The Problem',
+            heading: 'Why I Built It',
             paragraphs: [
-              `FLL teams need to present their work to judges, sponsors, and community members — ` +
-                `but most teams rely on scattered Google Docs, PowerPoints, and social media posts ` +
-                `that don't tell a cohesive story.`,
-              'The team also wanted an interactive way for visitors to learn about FIRST LEGO League concepts like Core Values, Robot Game strategy, and judging tips — without having to manually answer every question.',
-            ],
-          },
-          {
-            kind: 'list',
-            heading: 'Challenges',
-            tone: 'negative',
-            items: [
-              'No centralized showcase for robot design, outreach, and team identity',
-              'Visitors and judges had no quick way to learn about FIRST LEGO League or the team',
-              "Team members couldn't easily share progress with parents and sponsors",
-              'No interactive tool for exploring FIRST LEGO League knowledge and strategy',
+              'FLL teams need to present their work to judges, sponsors, and community members, but most teams rely on scattered docs and social media posts that don\'t tell a cohesive story.',
+              'The team also wanted an interactive way for visitors to learn about FIRST LEGO League itself, without having to manually answer every question.',
             ],
           },
           {
             kind: 'cards',
-            heading: 'What I Built',
-            blurb:
-              'A single-page React app with a full Express.js backend, deployed on Vercel. The site covers every aspect of the team — from member profiles to robot specs to community impact.',
+            heading: 'Highlights',
             cards: [
               {
-                title: 'Team Profiles',
-                body: '5 member cards with photos, roles, and favorite dinosaurs. Animated with Framer Motion on scroll.',
-              },
-              {
-                title: 'Robot Design',
-                body: 'Detailed breakdown of chassis, drive system, sensors, modular attachments, and block-based code with PID tuning.',
-              },
-              {
-                title: 'Community Outreach',
-                body: 'Museum Maker Day (120+ kids), Library Talks, and STEM Night (300 visitors) — all documented with photos and impact metrics.',
+                title: 'Team Profiles & Robot Design',
+                body: 'Member profiles and a look at the team\'s robot, alongside a timeline of the season.',
               },
               {
                 title: 'AI Chatbot',
-                body: 'GPT-4o-mini powered chatbot that searches the site first, then optionally searches the web — with built-in FIRST LEGO League knowledge base.',
+                body: 'Answers questions about the team and about FIRST LEGO League, searching the site first before optionally searching the web.',
               },
               {
-                title: 'Interactive Timeline',
-                body: 'Alternating timeline from team formation through competitions, outreach, and summer workshops.',
+                title: 'Community Outreach & Awards',
+                body: 'A showcase of the team\'s outreach events and competition awards.',
               },
-              {
-                title: 'Awards Gallery',
-                body: 'Championship Finalist, Robot Design Winner, and Core Values Award — with photos from competition events.',
-              },
-            ],
-          },
-          {
-            kind: 'steps',
-            heading: 'The AI Chatbot',
-            blurb:
-              'The chatbot was the most technically interesting piece. It uses a three-layer search strategy to always give the best possible answer while respecting user privacy.',
-            steps: [
-              {
-                title: 'Local Site Search',
-                body: 'First, the chatbot tokenizes the question and searches indexed content from the website itself — team data, section text, and member info. Fast, free, and private.',
-              },
-              {
-                title: 'Built-in FIRST LEGO League Knowledge Base',
-                body: 'If the question is about FIRST LEGO League concepts (Core Values, Robot Game, judging, Innovation Project), a curated knowledge base returns expert answers without any API calls.',
-              },
-              {
-                title: 'Web Search (User Consent Required)',
-                body: 'Only if the user explicitly agrees, the chatbot searches the web via Google Custom Search Engine, fetches page content, and uses GPT-4o-mini to synthesize a conversational answer with cited sources.',
-              },
-            ],
-          },
-          {
-            kind: 'cards',
-            heading: 'The Team',
-            blurb:
-              'The Unearthed Dinos are a 5-member FIRST LEGO League team exploring engineering through an archaeology theme — unearthing insights, testing hypotheses, and iterating like field scientists.',
-            cards: [
-              { title: 'Tanishqa — Media & Outreach Lead', body: 'Favorite dinosaur: Triceratops' },
-              { title: 'Simone — Hardware & Scheduling', body: 'Favorite dinosaur: Velociraptor' },
-              { title: 'Abhimanyu — Logistics & Email Admin', body: 'Favorite dinosaur: Stegosaurus' },
-              { title: 'Manveer — Attendance & Treasurer', body: 'Favorite dinosaur: Ankylosaurus' },
-              { title: 'Aarav — Team Member', body: 'Favorite dinosaur: Pachycephalosaurus' },
-            ],
-          },
-          {
-            kind: 'columns',
-            heading: 'Architecture',
-            blurb:
-              'Full-stack React + Express application with a Vercel serverless backend. The chatbot handles local search, FIRST LEGO League knowledge, and web search with LRU caching.',
-            columns: [
-              {
-                title: 'Frontend',
-                items: [
-                  'React 18 with Vite for fast HMR and builds',
-                  'Tailwind CSS with custom archaeology-themed color palette',
-                  'Framer Motion animations for team cards and scroll effects',
-                  'React Router for section-based navigation',
-                  'Client-side site search with tokenization and TF-IDF scoring',
-                ],
-              },
-              {
-                title: 'Backend',
-                items: [
-                  'Express.js server with Vercel serverless functions',
-                  'OpenAI GPT-4o-mini for natural language answer synthesis',
-                  'Google Custom Search Engine for web fallback',
-                  'LRU cache (100 entries, 10-min TTL) for API response caching',
-                  'Built-in FIRST LEGO League knowledge base with regex-matched answers',
-                ],
-              },
-            ],
-          },
-          {
-            kind: 'chips',
-            heading: 'Tech Stack',
-            items: [
-              'React 18',
-              'Vite',
-              'Tailwind CSS',
-              'Framer Motion',
-              'React Router',
-              'Express.js',
-              'Node.js',
-              'OpenAI GPT-4o-mini',
-              'Google Custom Search Engine',
-              'Vercel',
-              'LRU Cache',
-              'Lucide Icons',
-            ],
-          },
-          {
-            kind: 'cards',
-            heading: 'Team Awards',
-            blurb:
-              "The website showcases the team's competition achievements — all displayed in the Awards gallery section.",
-            cards: [
-              { title: 'Championship Finalist', body: 'First Dive 2024–2025' },
-              { title: 'Robot Design Winner', body: 'First Dive 2024–2025' },
-              { title: 'Core Values Award', body: 'MasterPiece 2023–2024' },
             ],
           },
           {
@@ -786,33 +537,8 @@ export const content: PortfolioContent = {
             heading: 'Community Outreach',
             stats: [
               { value: '120+', label: 'Museum Maker Day — hands-on robotics demo station for kids' },
-              {
-                value: '300+',
-                label: 'STEM Night — shared FIRST LEGO League core values and ran mini-missions',
-              },
-              { value: '3', label: 'Library Talks — Coding Fossils sessions empowering young minds' },
-            ],
-          },
-          {
-            kind: 'cards',
-            heading: 'What I Learned',
-            cards: [
-              {
-                title: 'Layered Search Architecture',
-                body: 'Try local content first → curated knowledge base → web search only with consent. This pattern minimizes API costs while maximizing answer quality.',
-              },
-              {
-                title: 'Building for Young Users',
-                body: 'The user interface needed to be instantly understandable for kids, parents, and judges. Clear hierarchy, big cards, and a warm color palette made it accessible to everyone.',
-              },
-              {
-                title: 'Dev-Mode Self-Tests',
-                body: 'Built in-browser self-tests that run in development to catch regressions — verifying section IDs, team data, and DOM structure automatically.',
-              },
-              {
-                title: 'Vercel Serverless',
-                body: 'Learned to structure Express.js routes as Vercel serverless functions, handle environment variables securely, and optimize cold start performance with response caching.',
-              },
+              { value: '300+', label: 'STEM Night — shared core values and ran mini-missions' },
+              { value: '3', label: 'Library Talks — coding sessions for young minds' },
             ],
           },
         ],
@@ -823,26 +549,17 @@ export const content: PortfolioContent = {
       title: 'TerraLend',
       period: '',
       blurb:
-        'Climate-aware agricultural lending engine that replaces static interest rates with dynamic, microclimate-driven risk pricing using live satellite and weather data.',
-      tech: [
-        'JavaScript',
-        'Leaflet.js',
-        'OpenStreetMap',
-        'CARTO',
-        'Satellite APIs',
-        'Climate APIs',
-        'Vercel',
-      ],
+        'A concept for climate-aware agricultural lending — replacing static, one-size-fits-all interest rates with pricing that responds to a farm\'s real, local conditions.',
+      tech: ['JavaScript', 'Leaflet.js', 'Satellite APIs', 'Climate APIs', 'Vercel'],
       built: [
-        'Built a climate-aware lending engine that continuously updates interest rates based on live satellite and weather data',
-        'Integrated NDVI, soil moisture, temperature anomaly, and rainfall data layers into an interactive Leaflet map',
-        'Created a simulation lab with climate archetypes (Dust Bowl, Deluge, Late Frost) to stress-test lending models',
-        'Designed multi-role views for loan officers, farmers, and simulation analysts with full transparency',
+        'An interactive map showing live climate and satellite data for a farm\'s location.',
+        'A simulation lab for testing how extreme weather scenarios affect loan pricing.',
+        'Separate views for loan officers and farmers, so both sides see the same reasoning.',
       ],
       impact:
-        'Interactive demo with live climate data, satellite overlays, and simulation lab for stress-testing lending models',
+        'An interactive demo showing how live climate data and satellite overlays could make agricultural lending more transparent.',
       learned:
-        'Translating complex climate data into actionable financial signals requires careful user experience design. The biggest challenge was making microclimate stress scores intuitive for non-technical users like farmers and loan officers.',
+        'Translating complex climate data into something intuitive for non-technical users like farmers and loan officers was the biggest design challenge.',
       links: [
         { label: 'View Code', href: GITHUB },
         { label: 'Live Demo', href: 'https://terralend-tejaswi.vercel.app/' },
@@ -852,7 +569,7 @@ export const content: PortfolioContent = {
       detail: {
         eyebrow: 'Climate-Aware FinTech',
         intro:
-          'A climate-aware agricultural lending engine that replaces static, regional-average interest rates with dynamic, microclimate-driven risk pricing using live satellite and weather data.',
+          'A concept for climate-aware agricultural lending, replacing static, regional-average interest rates with pricing that responds to a farm\'s real, local conditions using live satellite and weather data.',
         blocks: [
           {
             kind: 'video',
@@ -863,134 +580,34 @@ export const content: PortfolioContent = {
           },
           {
             kind: 'prose',
-            heading: 'The Problem',
+            heading: 'Why I Built It',
             paragraphs: [
               'Traditional agricultural lending uses static, annually-updated interest rates based on broad regional averages. A farmer in a drought-stricken microclimate pays the same rate as one with ideal growing conditions.',
-              'This approach ignores real-time climate risk, punishes good stewards, rewards ignorance, and gives farmers zero visibility into how their rates are determined.',
-            ],
-          },
-          {
-            kind: 'list',
-            heading: 'Old System Limitations',
-            tone: 'negative',
-            items: [
-              'Static 7.2% rate updated only annually',
-              'Based on broad regional averages',
-              'Risk model uses only historical yield',
-              'No farmer visibility into rate decisions',
+              'I wanted to explore what lending could look like with real-time climate visibility and full transparency for farmers into how their rate is set.',
             ],
           },
           {
             kind: 'cards',
-            heading: 'The TerraLend Solution',
-            blurb:
-              'TerraLend replaces the old model with a continuously-updated, climate-aware lending engine that uses live satellite data and microclimate stress scoring to dynamically price agricultural loan risk — giving both lenders and farmers full transparency.',
+            heading: 'Highlights',
             cards: [
               {
-                title: 'Temperature Anomaly',
-                body: 'Detects deviations from normal temperature ranges using live climate feeds, flagging heat stress or frost risk.',
-              },
-              {
-                title: 'Drought Index',
-                body: 'Monitors soil moisture levels and precipitation deficit to assess drought stress on crops in real time.',
-              },
-              {
-                title: 'Rainfall Anomaly',
-                body: 'Tracks rainfall patterns against historical baselines to detect flooding or drought conditions early.',
-              },
-              {
-                title: 'NDVI Vegetation Index',
-                body: 'Satellite-derived vegetation health monitoring showing crop vigor and land productivity in real time.',
-              },
-              {
-                title: 'Interactive Map',
-                body: 'Click any marker on the Leaflet-powered map to initialize a climate-aware lending analysis for that region.',
+                title: 'Live Climate Map',
+                body: 'An interactive map of satellite and weather data — vegetation health, soil moisture, temperature, and rainfall.',
               },
               {
                 title: 'Simulation Lab',
-                body: 'Run climate archetype scenarios — Dust Bowl, Deluge, Late Frost — to see how stress scores and rates respond.',
-              },
-            ],
-          },
-          {
-            kind: 'cards',
-            heading: 'Climate Archetypes',
-            blurb:
-              'The simulation lab lets users test extreme climate scenarios and see their real-time impact on stress scores and interest rates.',
-            cards: [
-              {
-                title: 'Dust Bowl',
-                body: 'Extreme drought simulation with high temperature anomalies, depleted soil moisture, and minimal rainfall.',
+                body: 'Test extreme climate scenarios, like drought or flooding, and see how pricing responds.',
               },
               {
-                title: 'The Deluge',
-                body: 'Flooding scenario with excessive rainfall, waterlogged soil, and potential crop submersion.',
+                title: 'Multi-Role Views',
+                body: 'Loan officers and farmers see the same underlying data through views tailored to each.',
               },
-              {
-                title: 'Late Frost',
-                body: 'Unseasonable cold snap damaging crops during growth phase with sharp temperature drops.',
-              },
-            ],
-          },
-          {
-            kind: 'cards',
-            heading: 'Multi-Role Perspectives',
-            blurb:
-              'TerraLend serves different stakeholders with tailored views of the same underlying climate data.',
-            cards: [
-              {
-                title: 'Loan Officer View',
-                body: 'See composite stress scores, rate recommendations, and risk justifications for underwriting decisions.',
-              },
-              {
-                title: 'Farmer View',
-                body: 'Full transparency into how climate data affects your rate — understand exactly what drives your loan pricing.',
-              },
-              {
-                title: 'Simulation Lab',
-                body: 'Run what-if scenarios with climate archetypes to stress-test lending models before deploying them.',
-              },
-            ],
-          },
-          {
-            kind: 'cards',
-            heading: 'Satellite Data Layers',
-            blurb:
-              'The interactive map supports multiple overlay layers for comprehensive environmental analysis.',
-            cards: [
-              { title: 'NDVI', body: 'Vegetation health index' },
-              { title: 'Soil Moisture', body: 'Ground water content' },
-              { title: 'Temperature', body: 'Thermal anomaly detection' },
-              { title: 'Rainfall', body: 'Precipitation tracking' },
             ],
           },
           {
             kind: 'chips',
             heading: 'Tech Stack',
-            items: [
-              'JavaScript',
-              'Leaflet.js',
-              'OpenStreetMap',
-              'CARTO',
-              'Satellite APIs',
-              'NDVI Data',
-              'Soil Moisture Sensors',
-              'Climate APIs',
-              'Vercel',
-              'HTML/CSS',
-            ],
-          },
-          {
-            kind: 'table',
-            heading: 'Old System vs. TerraLend',
-            columns: ['Dimension', 'Old System', 'TerraLend'],
-            rows: [
-              ['Interest Rate', 'Static 7.2%', 'Dynamic, climate-adjusted'],
-              ['Update Frequency', 'Annually', 'Continuously'],
-              ['Data Source', 'Regional averages', 'Live climate + satellite data'],
-              ['Risk Model', 'Historical yield', 'Microclimate stress scoring'],
-              ['Farmer Visibility', 'None', 'Full transparency'],
-            ],
+            items: ['JavaScript', 'Leaflet.js', 'Satellite APIs', 'Climate APIs', 'Vercel'],
           },
         ],
       },
@@ -1000,17 +617,16 @@ export const content: PortfolioContent = {
       title: 'WINFO Website',
       period: '',
       blurb:
-        'The official website for Women in Informatics (WINFO) at the University of Washington, built from scratch with React, Vite, and React Router.',
-      tech: ['React 19', 'Vite', 'React Router DOM', 'CSS Custom Properties'],
+        'The official website for Women in Informatics (WINFO) at the University of Washington, built from scratch.',
+      tech: ['React', 'Vite', 'React Router'],
       built: [
-        'Built the site from scratch with React 19 and Vite, using React Router DOM for client-side routing across 7 pages (Home, Hackathon, Events, Podcast, Officers, Membership, Support)',
-        'Set up a design token system in CSS custom properties for a consistent colour palette and typography (Poppins, Inter, Caveat, Space Mono via Google Fonts)',
-        'Kept page content in dedicated data files, separate from the page components, so copy and event info can be updated without touching JSX',
+        'Built the site from scratch, covering pages for events, officers, membership, and support.',
+        'Designed a consistent visual style and typography system across the whole site.',
       ],
       impact:
         'The live website for the University of Washington Women in Informatics organization.',
       learned:
-        'Built and designed the WINFO website from page structure and routing down to the design tokens and typography system.',
+        'Built and designed the WINFO website from page structure and routing down to the visual design system.',
       links: [
         {
           label: 'Live Site',
@@ -1020,31 +636,45 @@ export const content: PortfolioContent = {
       locationId: 'community-impact-greenhouse',
       contentTodo:
         'TODO: replace with the final project description and demo video once provided.',
+      detail: {
+        intro:
+          'The official website for Women in Informatics (WINFO) at the University of Washington, built from scratch to cover events, officers, membership, and support.',
+        blocks: [
+          { kind: 'prose', heading: 'Media', paragraphs: ['Media coming soon.'] },
+          {
+            kind: 'cards',
+            heading: 'Highlights',
+            cards: [
+              { title: 'Full Site', body: 'Covers events, officers, membership, and support in one place.' },
+              { title: 'Consistent Design', body: 'A shared visual style and typography system across every page.' },
+            ],
+          },
+        ],
+      },
     },
     {
       id: 'kaw',
       title: 'Kerala Association Membership Platform',
       period: 'May 2025 – Dec 2025',
       blurb:
-        'Production WordPress system managing 2,800+ member records with automated imports and daily backups.',
+        'A production WordPress system for the Kerala Association of Washington, moving its 2,800+ member records online with automated imports and daily backups.',
       tech: ['PHP', 'MySQL', 'JavaScript', 'WordPress'],
       built: [
-        'Migrated 2,800+ member records from inconsistent spreadsheets into WordPress with zero data loss',
-        'Built custom PHP plugins for CSV imports, user profiles, password resets, and automated backups',
-        'Designed schema mapping 9 key fields into searchable profiles and exportable admin reports',
-        'Implemented data validation preventing duplicate entries and handling missing fields',
+        'Moved 2,800+ member records from spreadsheets into a live WordPress membership system.',
+        'Built tools for importing new members and managing their profiles.',
+        'Set up automated daily backups to protect the live data.',
       ],
-      impact: 'System runs in production serving live member base',
+      impact: 'The system runs in production, serving the association\'s live member base.',
       learned:
-        'Data cleaning always takes longer than expected. Spreadsheets had duplicates, missing fields, and inconsistent formats. I built validation upfront and wrote documentation so others could maintain the system months later.',
+        'Data cleaning always takes longer than expected. I built validation upfront and wrote documentation so others could maintain the system after I was gone.',
       links: [
         { label: 'View Code', href: GITHUB },
         { label: 'Read the full write-up', href: '/projects/kaw' },
       ],
       detail: {
-        badges: ['2,800+ records migrated', 'Running in production', 'Zero data loss'],
+        badges: ['2,800+ records migrated', 'Running in production'],
         intro:
-          'A production WordPress migration system that moved 2,800+ member records from messy spreadsheets into a live membership platform — with automated imports, password management, daily backups, and zero data loss.',
+          'A production WordPress system for the Kerala Association of Washington — moving its 2,800+ member records from spreadsheets into a live membership platform, with automated imports and daily backups.',
         blocks: [
           {
             kind: 'image',
@@ -1057,225 +687,27 @@ export const content: PortfolioContent = {
           },
           {
             kind: 'prose',
-            heading: 'The Problem',
+            heading: 'Why It Was Needed',
             paragraphs: [
-              'Kerala Association of Washington (KAW) manages a community of 2,800+ members across the Seattle area. Their entire membership database lived in spreadsheets — with inconsistent formatting, duplicate entries, missing fields, and no way to search, filter, or manage members online.',
-              'They needed to migrate everything into their WordPress site with Paid Memberships Pro integration, while sending every member login credentials — all without losing a single record.',
-            ],
-          },
-          {
-            kind: 'list',
-            heading: 'Data Challenges',
-            tone: 'negative',
-            items: [
-              '2,800+ records scattered across multiple spreadsheets',
-              'Inconsistent column names and missing required fields',
-              'Duplicate members with no unique identifier',
-              'No automated way to assign membership levels',
-              'Members had no login credentials or online profiles',
-            ],
-          },
-          {
-            kind: 'prose',
-            heading: 'What I Built',
-            paragraphs: [
-              'I built two custom WordPress plugins from scratch: a CSV Migration Engine that handles the entire import pipeline, and a Backup & Restore System that protects the live database with automated daily snapshots.',
-            ],
-          },
-          {
-            kind: 'steps',
-            heading: 'Plugin 1: CSV Migration Engine',
-            blurb:
-              'The core plugin that imports CSV files, maps fields to WordPress user profiles, handles duplicates, manages memberships, and sends onboarding emails — all from a single admin page.',
-            steps: [
-              {
-                title: 'CSV Upload & Field Mapping',
-                body: 'Admin uploads a CSV and selects a membership level. The plugin parses every row and maps 9 key fields — FirstName, LastName, Phone, Email, MembershipId, MembershipLastPaidDate, RecordCreatedDate, MembershipYear, and IsActive — using a flexible column name matcher that handles inconsistent headers across different spreadsheets.',
-              },
-              {
-                title: 'Duplicate Detection & Smart Updates',
-                body: 'For each row, the engine checks if a user already exists by email. Existing users get updated — but only blank fields are overwritten, so manually-edited data is never lost. New users are created with auto-generated temporary passwords and a forced password reset on first login.',
-              },
-              {
-                title: 'City Extraction from Addresses',
-                body: 'Many records had full addresses instead of clean city names. I built a keyword-matching system that extracts cities from unstructured address strings — recognizing Seattle-area locations like Bellevue, Redmond, Kirkland, Sammamish, and Issaquah from partial matches.',
-              },
-              {
-                title: 'PMPro Membership Integration',
-                body: 'After user creation, the plugin assigns the correct Paid Memberships Pro level, storing membership metadata (ID, year, payment date, active status) as searchable user meta fields accessible from the WordPress admin.',
-              },
-              {
-                title: 'Email Onboarding System',
-                body: 'Every newly created member receives a branded HTML email with their temporary password, a direct link to the KAW login page, and clear instructions. Passwords expire after 90 days by default, and the system forces a password reset on first login for security.',
-              },
-              {
-                title: 'Audit Trail & CSV Reports',
-                body: 'After every import run, the plugin generates downloadable CSV reports: one for successfully imported/updated rows and one for skipped rows (with reasons like missing email or insertion errors). This gives the admin a complete audit trail of every migration.',
-              },
+              'Kerala Association of Washington (KAW) manages a community of 2,800+ members across the Seattle area. Their entire membership database lived in spreadsheets, with no way to search, filter, or manage members online.',
+              'The goal was to move everything into their WordPress site without losing a single record.',
             ],
           },
           {
             kind: 'cards',
-            heading: 'Plugin 2: Backup & Restore System',
-            blurb:
-              'A safety net for production data. Automated daily backups of all user records and membership data, with one-click restore, configurable retention, and email notifications.',
+            heading: 'Highlights',
             cards: [
               {
-                title: 'Scheduled Backups',
-                body: 'Runs daily or twice-daily at a configurable time, backing up all WordPress users, usermeta, and PMPro membership tables.',
+                title: 'Member Migration',
+                body: 'Moved 2,800+ member records from spreadsheets into WordPress with zero data loss.',
               },
               {
-                title: 'One-Click Restore',
-                body: 'Any backup can be restored instantly from the admin dashboard. The system handles table truncation, data reinsertion, and integrity checks.',
+                title: 'Automated Imports',
+                body: 'Built tools for importing new members and keeping profiles up to date.',
               },
               {
-                title: 'Retention Policy',
-                body: 'Keeps the last 30 backups by default, automatically pruning older snapshots to save server storage while maintaining a safety window.',
-              },
-              {
-                title: 'Email Notifications',
-                body: 'Sends the admin an email after every backup with file size, record counts, and status — so they know the system is working without checking manually.',
-              },
-            ],
-          },
-          {
-            kind: 'code',
-            heading: 'Architecture & Data Flow',
-            blurb:
-              'The migration pipeline processes each CSV row through a validation, deduplication, and enrichment pipeline before touching the database.',
-            language: 'text',
-            source: `CSV Upload
-  │
-  ├─ Parse headers → flexible column name matching
-  │
-  ├─ For each row:
-  │   ├─ Extract & validate email (skip if missing)
-  │   ├─ Map 9 fields: Name, Phone, Email, MembershipId,
-  │   │   MembershipYear, LastPaidDate, IsActive, City, RecordDate
-  │   │
-  │   ├─ City extraction from unstructured address strings
-  │   │   └─ Keyword match: Bellevue, Redmond, Seattle, Kirkland...
-  │   │
-  │   ├─ Check: user exists by email?
-  │   │   ├─ YES → Update only blank fields (preserve manual edits)
-  │   │   └─ NO  → Create user with temp password
-  │   │           ├─ Set password expiration (+90 days)
-  │   │           ├─ Force reset on first login
-  │   │           └─ Send branded onboarding email
-  │   │
-  │   ├─ Assign PMPro membership level
-  │   ├─ Store all metadata as searchable user meta
-  │   └─ Log to success[] or skipped[] array
-  │
-  ├─ Generate downloadable CSV: successful imports
-  └─ Generate downloadable CSV: skipped rows + reasons`,
-          },
-          {
-            kind: 'chips',
-            heading: 'Tech Stack',
-            items: [
-              'PHP — Plugin development',
-              'MySQL — Database & queries',
-              'WordPress — Platform & APIs',
-              'PMPro — Membership levels',
-              'CSV Parsing — Data import',
-              'wp_mail — Email system',
-              'WP-Cron — Scheduled backups',
-              'Data Validation — Dedup & cleanup',
-            ],
-          },
-          {
-            kind: 'stats',
-            heading: 'By the Numbers',
-            stats: [
-              { value: '2,800+', label: 'Member records migrated' },
-              { value: '9', label: 'Fields mapped per record' },
-              { value: '0', label: 'Records lost' },
-              { value: '2', label: 'Custom plugins built' },
-            ],
-          },
-          {
-            kind: 'code',
-            heading: 'Code Highlights — Flexible CSV Column Matcher',
-            blurb:
-              'Different spreadsheets used different column names for the same data. Instead of requiring exact headers, I built a helper that normalizes column names and matches against known aliases:',
-            language: 'php',
-            source: `function kaw_get_csv_value($row, $possible_names) {
-    foreach ($possible_names as $name) {
-        // Try exact match
-        if (isset($row[$name])) return trim($row[$name]);
-        // Try case-insensitive match
-        foreach ($row as $key => $value) {
-            if (strtolower(trim($key)) === strtolower($name)) {
-                return trim($value);
-            }
-        }
-    }
-    return '';
-}`,
-          },
-          {
-            kind: 'code',
-            heading: 'Code Highlights — Smart Update Logic',
-            blurb:
-              "When a user already exists, only blank metadata fields get overwritten — preserving any manual edits the admin previously made:",
-            language: 'php',
-            source: `// Only update meta if current value is empty
-$current = get_user_meta($user_id, $meta_key, true);
-if (empty($current) && !empty($new_value)) {
-    update_user_meta($user_id, $meta_key, $new_value);
-}`,
-          },
-          {
-            kind: 'code',
-            heading: 'Code Highlights — Password Expiration System',
-            blurb:
-              'Temporary passwords auto-expire after 90 days. On first login, users are forced to reset — preventing indefinite use of shared credentials:',
-            language: 'php',
-            source: `// Set expiration timestamp (+90 days)
-$expiration = time() + (90 * DAY_IN_SECONDS);
-update_user_meta($user_id, 'kaw_temp_pw_expires', $expiration);
-
-// Force password reset on first login
-update_user_meta($user_id, 'default_password_nag', true);`,
-          },
-          {
-            kind: 'cards',
-            heading: 'What I Learned',
-            cards: [
-              {
-                title: 'Data Cleaning is the Real Work',
-                body: 'The actual code took weeks, but cleaning the data took longer. Spreadsheets had inconsistent names, duplicate emails, missing required fields, and addresses where city names should be. I learned to build validation upfront rather than fixing errors downstream.',
-              },
-              {
-                title: 'Production Code Needs Safety Nets',
-                body: `This wasn't a class project — real people depend on this data. That's why I built the backup system, audit trail CSVs, and the "only overwrite blank fields" logic. You can't undo mistakes when 2,800+ members are affected.`,
-              },
-              {
-                title: 'Document Everything',
-                body: "I wrote documentation so the KAW team could run imports without me. The system needed to be maintainable by people who didn't write it — which forced me to write cleaner code and build intuitive admin interfaces.",
-              },
-              {
-                title: 'WordPress is a Real Platform',
-                body: "Building custom plugins taught me how WordPress actually works under the hood — hooks, actions, filters, the admin API, WP-Cron, and the user meta system. It's a full application framework, not just a blogging tool.",
-              },
-            ],
-          },
-          {
-            kind: 'steps',
-            heading: 'Next Steps',
-            steps: [
-              {
-                title: 'Member Self-Service Portal',
-                body: 'Let members update their own profiles, view membership status, and manage contact information without admin intervention.',
-              },
-              {
-                title: 'Automated Renewal Emails',
-                body: 'Build a notification system that emails members when their membership is approaching expiration, with a direct renewal link.',
-              },
-              {
-                title: 'Analytics Dashboard',
-                body: 'Create an admin dashboard showing membership growth trends, active vs. lapsed members, and import history over time.',
+                title: 'Daily Backups',
+                body: 'Automated backups protect the live membership data every day.',
               },
             ],
           },
@@ -1287,17 +719,15 @@ update_user_meta($user_id, 'default_password_nag', true);`,
       title: 'Cyber Minds AI Chatbot',
       period: 'Jan 2024 – Jun 2024',
       blurb:
-        'Conversational chatbot handling common user inquiries for a cybersecurity education nonprofit.',
-      tech: ['Python', 'scikit-learn', 'Machine Learning', 'Firebase', 'Web APIs'],
+        'A conversational chatbot that answers common questions for a cybersecurity education nonprofit.',
+      tech: ['Python', 'scikit-learn', 'Firebase'],
       built: [
-        'Deployed chatbot handling 100+ monthly website interactions about course information',
-        'Built machine learning model personalizing content across 8-module cybersecurity curriculum',
-        'Led 5-person cross-functional team coordinating students and volunteers',
-        'Established weekly check-ins keeping project aligned with organizational goals',
+        'A chatbot that answers common visitor questions about the nonprofit\'s courses.',
+        'A model that personalizes course content for students working through the curriculum.',
       ],
-      impact: 'Handles 100+ monthly interactions, reducing manual response time',
+      impact: 'Handles visitor questions on the nonprofit\'s website, reducing manual response time.',
       learned:
-        'Leading volunteers differs from leading employees. People have competing priorities. I learned to set realistic timelines and flag blockers early.',
+        'Leading volunteers differs from leading employees — people have competing priorities. I learned to set realistic timelines and flag blockers early.',
       links: [{ label: 'View Code', href: GITHUB }],
     },
     {
@@ -1305,18 +735,17 @@ update_user_meta($user_id, 'default_password_nag', true);`,
       title: 'Bump',
       period: '',
       blurb:
-        'Native iOS social app that uses real-time location proximity and calendar integration to help friends meet up spontaneously — built with SwiftUI, Supabase, and CoreLocation.',
-      tech: ['SwiftUI', 'Supabase', 'CoreLocation', 'EventKit', 'Swift', 'iOS'],
+        'A native iOS social app that helps friends meet up spontaneously by combining real-time location proximity with calendar availability.',
+      tech: ['SwiftUI', 'Supabase', 'CoreLocation', 'EventKit', 'Swift'],
       built: [
-        'Built native iOS app with real-time location tracking that detects nearby friends within 100 meters using CoreLocation',
-        'Integrated Supabase backend with Edge Functions for friend requests, user authentication, and real-time location uploads',
-        'Implemented calendar integration via EventKit to surface mutual availability and smart scheduling',
-        'Designed multi-tab experience with Home, Map, Agent, Profile, and Settings views with full privacy controls',
+        'Detects when friends are nearby and lets you send a casual, low-pressure invite to meet up.',
+        'Shows mutual calendar availability so plans land on a time that actually works.',
+        'Built with privacy controls that let users choose when to share their location and availability.',
       ],
       impact:
-        'Functional prototype with real-time friend proximity detection, friend requests via Supabase Edge Functions, and calendar-aware scheduling',
+        'A functional prototype demonstrating real-time friend proximity detection and calendar-aware scheduling.',
       learned:
-        'Privacy matters more than features. Users worry about real-time location sharing. I built granular opt-in controls where users choose when to share availability, with clear privacy policies and the ability to disable location, calendar, or notifications anytime.',
+        'Privacy matters more than features — users worry about real-time location sharing, so I built granular opt-in controls with the ability to disable location, calendar, or notifications at any time.',
       links: [
         { label: 'View Code', href: 'https://github.com/TejaswiErattu/bump' },
         { label: 'Read the full write-up', href: '/projects/bump' },
@@ -1325,7 +754,7 @@ update_user_meta($user_id, 'default_password_nag', true);`,
       detail: {
         eyebrow: 'Native iOS App',
         intro:
-          'A native iOS social app that uses real-time location proximity and calendar integration to help friends meet up spontaneously — reducing the friction between wanting to hang out and actually doing it.',
+          'A native iOS social app that helps friends meet up spontaneously by combining real-time location proximity with calendar availability — reducing the friction between wanting to hang out and actually doing it.',
         blocks: [
           {
             kind: 'video',
@@ -1336,125 +765,34 @@ update_user_meta($user_id, 'default_password_nag', true);`,
           },
           {
             kind: 'prose',
-            heading: 'The Problem',
+            heading: 'Why I Built It',
             paragraphs: [
-              "Making plans with friends shouldn't feel like a chore. You match online but never meet in person. Scheduling feels awkward. Even when you're nearby, you have no idea your friend is just around the corner.",
-              'Existing social apps focus on messaging but don’t solve the last-mile problem — actually getting people in the same place at the same time.',
-            ],
-          },
-          {
-            kind: 'list',
-            heading: 'The Social Friction',
-            tone: 'negative',
-            items: [
-              'No way to know if friends are nearby',
-              'Scheduling requires back-and-forth messaging',
-              'Suggesting plans carries social risk',
-              "Calendar availability isn't shared or visible",
+              "Making plans with friends shouldn't feel like a chore. Even when you're nearby, you have no idea your friend is just around the corner, and scheduling usually means back-and-forth messaging.",
+              'I wanted an app that makes spontaneous meetups effortless — without giving up control over your privacy.',
             ],
           },
           {
             kind: 'cards',
-            heading: 'How Bump Works',
-            blurb:
-              'Bump combines real-time location awareness with calendar intelligence to surface spontaneous meetup opportunities — then makes it effortless to act on them.',
+            heading: 'Highlights',
             cards: [
               {
                 title: 'Proximity Detection',
-                body: 'Detects friends within 100 meters using CoreLocation. Uploads coordinates to Supabase and compares positions in real time.',
+                body: 'Detects friends nearby and lets you send a quick, casual invite to meet up.',
               },
               {
-                title: 'Calendar Integration',
-                body: 'Imports events from Apple Calendar (and Google via iOS). Shows free/busy status so friends know when you’re available.',
+                title: 'Calendar-Aware Scheduling',
+                body: 'Shows mutual availability so plans land on a time that actually works.',
               },
               {
-                title: 'Friend System',
-                body: 'Send and accept friend requests by phone number. Manage your social circle with a clean, card-based interface.',
-              },
-              {
-                title: 'Bump Notifications',
-                body: 'Send quick "bump" pings to friends — casual, low-pressure invitations like "Down for coffee?" or "I’m nearby!"',
-              },
-              {
-                title: 'Privacy Controls',
-                body: 'Granular settings for location, calendar, and notifications. Online status toggle, distance limits, and auto-decline when busy.',
-              },
-              {
-                title: 'Smart Scheduling',
-                body: 'Auto-decline invitations when you’re busy. Share free/busy schedule with friends so meetups happen when everyone’s available.',
-              },
-            ],
-          },
-          {
-            kind: 'cards',
-            heading: 'App Experience',
-            blurb:
-              'Bump is organized into a multi-tab experience, each designed to reduce friction between wanting to meet up and actually doing it.',
-            cards: [
-              { title: 'Home', body: 'Location status & nearby friends' },
-              { title: 'Map', body: 'Visual friend proximity' },
-              { title: 'Agent', body: 'AI-powered suggestions' },
-              { title: 'Profile', body: 'Bio, schedule & calendar' },
-              { title: 'Settings', body: 'Privacy & permissions' },
-            ],
-          },
-          {
-            kind: 'columns',
-            heading: 'Architecture',
-            blurb:
-              'Built as a native SwiftUI app with a serverless Supabase backend. Location data flows through CoreLocation to Supabase Postgres, with Edge Functions handling friend request logic.',
-            columns: [
-              {
-                title: 'Frontend',
-                items: [
-                  'SwiftUI with @StateObject and @AppStorage for state management',
-                  'CoreLocation for real-time GPS tracking',
-                  'EventKit for Apple & Google Calendar integration',
-                  'Sign in with Apple & Google authentication stubs',
-                  'Local notifications for bump alerts',
-                ],
-              },
-              {
-                title: 'Backend',
-                items: [
-                  'Supabase Postgres for user data and locations',
-                  'Edge Functions for friend request send/accept/reject',
-                  'Real-time location upserts with user_locations table',
-                  'Proximity queries fetching friends within 100m radius',
-                  'Supabase Swift SDK for native iOS integration',
-                ],
+                title: 'Privacy-First Design',
+                body: 'Granular controls for location, calendar, and notifications — every sharing feature has an opt-out.',
               },
             ],
           },
           {
             kind: 'chips',
             heading: 'Tech Stack',
-            items: [
-              'Swift',
-              'SwiftUI',
-              'CoreLocation',
-              'EventKit',
-              'UserNotifications',
-              'Supabase',
-              'Postgres',
-              'Edge Functions',
-              'Sign in with Apple',
-              'Xcode',
-              'iOS 17+',
-              'MVVM',
-            ],
-          },
-          {
-            kind: 'cards',
-            heading: 'Privacy-First Design',
-            blurb:
-              'The biggest lesson from building Bump: privacy matters more than features. Every data-sharing feature has a corresponding opt-out control.',
-            cards: [
-              { title: 'Location', body: 'Toggle on/off with distance limits' },
-              { title: 'Calendar', body: 'Share free/busy only, never details' },
-              { title: 'Notifications', body: 'Full control with iOS Settings link' },
-              { title: 'Online Status', body: 'Show/hide visibility to friends' },
-            ],
+            items: ['Swift', 'SwiftUI', 'CoreLocation', 'EventKit', 'Supabase'],
           },
         ],
       },
@@ -1468,7 +806,7 @@ update_user_meta($user_id, 'default_password_nag', true);`,
       company: 'Palana',
       period: 'June 2026 – Present',
       location: 'Seattle, WA',
-      bullets: PALANA_BULLETS,
+      bullets: PALANA_ROLE_SUMMARY,
       current: true,
       locationId: 'current-roles-station',
     },
@@ -1478,13 +816,7 @@ update_user_meta($user_id, 'default_password_nag', true);`,
       company: 'Accountability & Hopeful Fridays',
       period: 'May 2026 – Present',
       location: 'Remote',
-      bullets: [
-        'Led technical infrastructure planning across 6 systems (GoHighLevel, GitHub, SharePoint, Microsoft Planner, Trello, WordPress), designing a 6-phase roadmap covering CI/CD, website migration, and member portal',
-        'Built 3 task management proof-of-concepts (Microsoft Planner, Trello, GitHub Projects) and delivered structured comparison to guide leadership decision for a 10+ person organization',
-        'Designed CI/CD pipeline architecture (feature → development → staging → production) with branch protection and required reviewers, establishing deployment standards for a team of 5+ developers',
-        'Audited and documented 5+ GoHighLevel automation workflows and created safe test protocols to prevent disruption to live member communications',
-        'Consolidated 40+ cross-team tasks into a centralized tracking system, reducing coordination overhead across technical and non-technical contributors',
-      ],
+      bullets: AHF_ROLE_SUMMARY,
       current: true,
       locationId: 'current-roles-station',
     },
@@ -1495,11 +827,8 @@ update_user_meta($user_id, 'default_password_nag', true);`,
       period: 'Current position',
       location: 'Seattle, WA',
       bullets: [
-        'Serves as Finance Director for Women in Informatics at the University of Washington',
-        'Manages organizational budgets and financial tracking, including member reimbursements',
-        'Supports sponsorship coordination and helps find sponsors for club initiatives',
-        'Helps prepare funding and grant materials',
-        "Tracks finances for club events and initiatives, including WINFO's hackathon",
+        'Serves as Finance Director for Women in Informatics at the University of Washington.',
+        'Supports the organization through finance and coordination — budgets, reimbursements, and sponsorships.',
       ],
       current: true,
       locationId: 'current-roles-station',
@@ -1511,9 +840,8 @@ update_user_meta($user_id, 'default_password_nag', true);`,
       period: 'May 2025 – Dec 2025',
       location: 'Sammamish, WA',
       bullets: [
-        'Migrated 2,800+ member records to WordPress via a custom PHP/MySQL ETL pipeline, cutting manual data entry time by 75%',
-        'Built custom WordPress plugins (PHP, MySQL, JavaScript/AJAX) for real-time member management and automated daily backups via WP-Cron',
-        'Automated report generation with exportable data fields (PHP, SQL), cutting monthly turnaround from hours to minutes',
+        'Helped Kerala Association of Washington move its member records onto a production WordPress system.',
+        'Built the membership platform that the organization uses today — see the Kerala Association of Washington station for an overview.',
       ],
       locationId: 'engineering-workshop',
     },
@@ -1524,8 +852,8 @@ update_user_meta($user_id, 'default_password_nag', true);`,
       period: 'Jan 2025 – Sept 2025',
       location: 'Sammamish, WA',
       bullets: [
-        'Taught coding to 60+ elementary and middle school students using Minecraft Education, Roblox Lua, and Python',
-        'Led 4 robotics and Minecraft camps mentoring teams of 8–12 students through hands-on STEM challenges',
+        'Taught coding to 60+ elementary and middle school students using Minecraft Education and Python.',
+        'Led robotics and Minecraft camps mentoring small student teams through hands-on STEM challenges.',
       ],
       locationId: 'ai-teaching-schoolhouse',
     },
@@ -1536,8 +864,7 @@ update_user_meta($user_id, 'default_password_nag', true);`,
       period: 'May 2024 – May 2025',
       location: 'Sammamish, WA',
       bullets: [
-        "Trained and evaluated 5 classification/regression models (TensorFlow, scikit-learn) for Saturn AI's grading engine, improving accuracy by 40% for 50+ K-12 students",
-        'Optimized model performance through hyperparameter tuning, cutting average response time from 8s to 3s',
+        'Trained and evaluated machine learning models for an educational platform supporting K-12 students.',
       ],
       locationId: 'ai-teaching-schoolhouse',
     },
@@ -1560,9 +887,7 @@ update_user_meta($user_id, 'default_password_nag', true);`,
       period: 'Jan 2024 – June 2024',
       location: 'Sammamish, WA',
       bullets: [
-        'Built and deployed a Python (scikit-learn) chatbot integrated via Firebase, handling 100+ monthly user interactions and cutting average response time by 60%',
-        'Led a 5-person team using Agile sprints (GitHub Projects) to integrate a TensorFlow-based ML model into production 2 weeks ahead of schedule',
-        'Trained a scikit-learn classification model on student interaction data to personalize an 8-module cybersecurity curriculum, boosting engagement scores by 35%',
+        'Built and deployed a chatbot for a cybersecurity education nonprofit and led a small team building a machine learning-powered course.',
       ],
       locationId: 'ai-teaching-schoolhouse',
     },
@@ -1752,8 +1077,7 @@ update_user_meta($user_id, 'default_password_nag', true);`,
     github: GITHUB,
     resumes: RESUMES,
     location: LOCATION,
-    blurb:
-      "I'm looking for 2027 software engineering and security internships where I solve complex problems and ship impactful products.",
+    blurb: "I'd love to hear from you — feel free to reach out by email, LinkedIn, or GitHub.",
     rolesSeeking: [
       'Software engineering',
       'Security engineering',
@@ -1797,7 +1121,7 @@ export const villageLocations: VillageLocation[] = [
     id: 'about-cottage',
     name: 'About Me Flower Cottage',
     signHeading: 'ABOUT ME',
-    signDescription: 'A little about who I am and what I am looking for.',
+    signDescription: 'A little about who I am and where I studied.',
     windows: [
       {
         id: 'introduction',
@@ -1808,11 +1132,6 @@ export const villageLocations: VillageLocation[] = [
         id: 'uw-education',
         label: 'UW and Education',
         description: 'My degree, focus area, and university.',
-      },
-      {
-        id: 'looking-for',
-        label: "What I'm Looking For",
-        description: 'The kinds of roles I am seeking.',
       },
     ],
   },

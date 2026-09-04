@@ -43,10 +43,12 @@ import {
   createFeedPileSprite,
   createEnvelopeSprite,
   createPathTileSprite,
+  createPlantingBedSprite,
   createRailSprite,
   createSignpostSprite,
   createSmokePuffSprite,
   createTrainSprite,
+  createTreeSprite,
   postOfficeChimneyMouth,
   trainSmokestackMouth,
 } from './worldSprites'
@@ -214,6 +216,16 @@ const TRAIN_SMOKE_DRIFT = 7
 /** Reduced motion: puffs appear already drifted apart and hold in place. */
 const TRAIN_SMOKE_REDUCED_LIFE_SECONDS = 1.2
 const TRAIN_SMOKE_REDUCED_SPREAD = 6
+
+/**
+ * A single, lighter puff while the train is actually travelling (as opposed
+ * to the fuller `TRAIN_SMOKE_COUNT`-puff burst on arrival) — a trail rather
+ * than a cloud. Only reached from the 'entering'/'leaving' phases, which
+ * reduced motion never enters (it starts straight in 'reducedHold'), so this
+ * naturally never fires under reduced motion without needing its own guard.
+ */
+const TRAIN_MOVING_SMOKE_INTERVAL_SECONDS = 0.35
+const TRAIN_MOVING_SMOKE_LIFE_SECONDS = 0.7
 
 /**
  * Fixed, predetermined empty grass tiles near the Community Impact
@@ -412,6 +424,8 @@ const GROUND_SPRITE_SYMBOLS: Record<string, string> = {
   P: 'path',
   b: 'bush',
   v: `flower-${Math.min(1, FLOWER_VARIANTS - 1)}`,
+  T: 'tree',
+  k: 'planting-bed',
 }
 
 /**
@@ -548,7 +562,12 @@ function buildSignposts(
         openDialogue({
           id: `signpost-${signpost.symbol}`,
           title: signpost.title,
-          lines: signpost.lines,
+          subtitle: signpost.subtitle,
+          lines: [],
+          legend: signpost.legend,
+          locationId: signpost.locationId,
+          accent: signpost.themeAccent,
+          icon: signpost.themeIcon,
         }),
     })
   }
@@ -770,6 +789,8 @@ export function createGame(canvas: HTMLCanvasElement, callbacks: GameCallbacks):
   k.loadSprite('envelope', createEnvelopeSprite())
   k.loadSprite('path', createPathTileSprite())
   k.loadSprite('bush', createBushSprite())
+  k.loadSprite('tree', createTreeSprite())
+  k.loadSprite('planting-bed', createPlantingBedSprite())
 
   loadScenerySprites(k)
 
@@ -887,8 +908,14 @@ export function createGame(canvas: HTMLCanvasElement, callbacks: GameCallbacks):
         ])
 
         type TrainPhase = 'entering' | 'holding' | 'leaving' | 'reducedHold'
-        let train: { obj: GameObj; phase: TrainPhase; timer: number; hornPlayed: boolean } | null =
-          null
+        let train: {
+          obj: GameObj
+          phase: TrainPhase
+          timer: number
+          hornPlayed: boolean
+          /** Seconds since the last travelling smoke puff — only ticks in 'entering'/'leaving'. */
+          smokeTimer: number
+        } | null = null
 
         interface SmokePuff {
           obj: GameObj
@@ -946,6 +973,33 @@ export function createGame(canvas: HTMLCanvasElement, callbacks: GameCallbacks):
           }
         }
 
+        // One light puff from the stack while the train is under way — the
+        // "while it moves" half of the smoke behaviour, distinct from
+        // `spawnSmoke`'s fuller burst on arrival. Pushed into the same
+        // `smokePuffs` array, so it ages, drifts and gets destroyed by the
+        // exact same `updateSmoke`/`clearSmoke` every other puff does —
+        // nothing new to track or leak.
+        const spawnTrailPuff = (trainX: number, trainY: number): void => {
+          const mouth = trainSmokestackMouth()
+          const stackX = trainX + mouth.x
+          const stackY = trainY + mouth.y
+          const obj = k.add([
+            k.sprite('smokePuff'),
+            k.pos(stackX, stackY),
+            k.anchor('center'),
+            k.z(TRAIN_Z + 1),
+            k.opacity(1),
+            k.scale(0.55),
+          ])
+          smokePuffs.push({
+            obj,
+            age: 0,
+            life: TRAIN_MOVING_SMOKE_LIFE_SECONDS,
+            driftX: 0,
+            riseY: TRAIN_SMOKE_RISE_SPEED,
+          })
+        }
+
         const updateSmoke = (dt: number): void => {
           for (let i = smokePuffs.length - 1; i >= 0; i--) {
             const puff = smokePuffs[i]
@@ -996,7 +1050,13 @@ export function createGame(canvas: HTMLCanvasElement, callbacks: GameCallbacks):
           ])
           // No k.area()/k.body() — a train with no collider physically
           // cannot block the player, regardless of where it visually sits.
-          train = { obj, phase: reducedMotion ? 'reducedHold' : 'entering', timer: 0, hornPlayed: false }
+          train = {
+            obj,
+            phase: reducedMotion ? 'reducedHold' : 'entering',
+            timer: 0,
+            hornPlayed: false,
+            smokeTimer: 0,
+          }
 
           // Reduced motion skips 'entering' entirely — the train is already
           // at the platform the instant it appears, so this is the one and
@@ -1030,6 +1090,14 @@ export function createGame(canvas: HTMLCanvasElement, callbacks: GameCallbacks):
             const speedFactor = Math.max(TRAIN_MIN_SPEED_FACTOR, Math.min(1, dist / TRAIN_SLOW_RADIUS))
             const step = Math.min(dist, TRAIN_CRUISE_SPEED * speedFactor * dt)
             train.obj.pos.x += Math.sign(dx) * step
+            // A light trailing puff every `TRAIN_MOVING_SMOKE_INTERVAL_SECONDS`
+            // while under way — subtracting rather than zeroing keeps the
+            // cadence steady instead of drifting a frame late each time.
+            train.smokeTimer += dt
+            if (train.smokeTimer >= TRAIN_MOVING_SMOKE_INTERVAL_SECONDS) {
+              train.smokeTimer -= TRAIN_MOVING_SMOKE_INTERVAL_SECONDS
+              spawnTrailPuff(train.obj.pos.x, train.obj.pos.y)
+            }
             if (dist <= 1) {
               train.obj.pos.x = stationCenterX
               train.phase = 'holding'
@@ -1049,7 +1117,12 @@ export function createGame(canvas: HTMLCanvasElement, callbacks: GameCallbacks):
               playTrainHorn()
               train.hornPlayed = true
             }
-            if (train.timer >= TRAIN_HOLD_SECONDS) train.phase = 'leaving'
+            if (train.timer >= TRAIN_HOLD_SECONDS) {
+              train.phase = 'leaving'
+              // Starts the departure's trailing smoke cadence fresh, rather
+              // than carrying over whatever was left of the arrival's timer.
+              train.smokeTimer = 0
+            }
             return
           }
 
@@ -1058,6 +1131,11 @@ export function createGame(canvas: HTMLCanvasElement, callbacks: GameCallbacks):
           const traveled = train.obj.pos.x - stationCenterX
           const speedFactor = Math.max(TRAIN_MIN_SPEED_FACTOR, Math.min(1, traveled / TRAIN_SLOW_RADIUS))
           train.obj.pos.x += TRAIN_CRUISE_SPEED * speedFactor * dt
+          train.smokeTimer += dt
+          if (train.smokeTimer >= TRAIN_MOVING_SMOKE_INTERVAL_SECONDS) {
+            train.smokeTimer -= TRAIN_MOVING_SMOKE_INTERVAL_SECONDS
+            spawnTrailPuff(train.obj.pos.x, train.obj.pos.y)
+          }
           if (train.obj.pos.x >= exitX) despawnTrain()
         }
 

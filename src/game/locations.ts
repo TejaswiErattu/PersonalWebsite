@@ -58,12 +58,54 @@ export interface DialogueCard {
   crossLink?: { label: string; experienceId: string }
 }
 
+/** One boxed callout at the end of a dialogue's highlights — "What I Learned", "Next Step". */
+export interface DialogueNote {
+  label: string
+  text: string
+}
+
+/** One entry in a signpost's window/plot legend: a name, a description, and a matching colour/icon marker. */
+export interface LegendEntry {
+  id: string
+  label: string
+  description: string
+  accent: string
+  icon: IconId
+}
+
+/** One contact panel: an icon, a short description, and a clear action button. */
+export interface ContactPanel {
+  icon: IconId
+  label: string
+  description: string
+  actionLabel: string
+  href: string
+}
+
 /** One screen of content, rendered all at once in the village overlay. */
 export interface Dialogue {
   /** Matches the section id in content.ts, so both stay in step. */
   id: string
   title: string
+  /**
+   * A short line shown under the title — role/company/period for an
+   * experience station, a project's blurb, or a signpost's one-line
+   * description. Omitted where the title alone already says enough.
+   */
+  subtitle?: string
   lines: string[]
+  /**
+   * A small eyebrow label painted above `lines`, e.g. "Highlights". Left
+   * unset for flowing introductory text (About's welcome message, a short
+   * achievement line), where a label would read as a non-sequitur.
+   */
+  linesLabel?: string
+  /** A single boxed callout after the highlights — "What I Learned", "Next Step". */
+  note?: DialogueNote
+  /** A signpost's window/plot legend. Only signposts set this. */
+  legend?: LegendEntry[]
+  /** One or more contact panels (icon, description, action button). Only the Post Office sets this. */
+  contact?: ContactPanel[]
   /**
    * A project's long-form write-up — the same `DetailBlock[]` the project's
    * own `/projects/<id>` page renders, via the same `DetailBlockView`.
@@ -78,6 +120,12 @@ export interface Dialogue {
    * `content.ts`.
    */
   suggestionForm?: boolean
+  /** Which village location this dialogue belongs to — drives the overlay's subtle per-location theme. */
+  locationId?: string
+  /** Popup accent colour for this dialogue's theme. Set via `withTheme()`/`LOCATION_THEME`, not by hand. */
+  accent?: string
+  /** Popup header icon for this dialogue's theme. Set via `withTheme()`/`LOCATION_THEME`, not by hand. */
+  icon?: IconId
 }
 
 /** One trigger inside a multi-station building (a window, a plot). */
@@ -124,9 +172,43 @@ export interface LocationDef {
   contextualAction?: ContextualActionId
 }
 
-/** Shorthand for joining several existing content.ts strings into one beat. */
-function join(items: string[]): string {
-  return items.join(' · ')
+/**
+ * Popup accent colour + header icon per village location — tuned for
+ * legibility against the dark overlay panel, deliberately separate from each
+ * building's own (often much darker, sprite-matched) wall colour. Applied to
+ * every dialogue via `withTheme()` below, so the overlay system stays one
+ * coherent design with only a subtle per-location colour shift — nothing
+ * here touches a sprite, the map, or the in-world signpost board colour.
+ */
+const LOCATION_THEME: Record<string, { accent: string; icon: IconId }> = {
+  'about-cottage': { accent: '#e88ec0', icon: 'heart' },
+  'current-roles-station': { accent: '#6fa8e8', icon: 'flag' },
+  'engineering-workshop': { accent: '#e0a45b', icon: 'gear' },
+  'ai-teaching-schoolhouse': { accent: '#a78bfa', icon: 'cap' },
+  'mobile-innovation-observatory': { accent: '#7c93e8', icon: 'pin' },
+  'developer-tools-workshop': { accent: '#e0729e', icon: 'terminal' },
+  'community-impact-greenhouse': { accent: '#7cc47a', icon: 'leaf' },
+  'growth-farm': { accent: '#c9d66b', icon: 'sprout' },
+  'contact-post-office': { accent: '#5cc8c8', icon: 'mail' },
+}
+
+/**
+ * Stamps every station's dialogue with its location's popup theme (and the
+ * location id itself, so the overlay can key off it later). Wraps the
+ * dialogue factory rather than the station, so each station's own
+ * `accent`/`icon` — its window's world-sprite colour — is untouched.
+ */
+function withTheme(locationId: string, stations: StationDef[]): StationDef[] {
+  const theme = LOCATION_THEME[locationId]
+  return stations.map((station) => ({
+    ...station,
+    dialogue: (): Dialogue => ({
+      ...station.dialogue(),
+      locationId,
+      accent: theme.accent,
+      icon: theme.icon,
+    }),
+  }))
 }
 
 /**
@@ -162,7 +244,9 @@ export function experienceDialogue(id: string): Dialogue | null {
   return {
     id: `experience-${entry.id}`,
     title: `${entry.role} — ${entry.company}`,
-    lines: [`${entry.company} · ${entry.location} · ${entry.period}`, ...entry.bullets],
+    subtitle: `${entry.company} · ${entry.location} · ${entry.period}`,
+    lines: entry.bullets,
+    linesLabel: 'Highlights',
   }
 }
 
@@ -174,11 +258,12 @@ export const LOCATIONS: LocationDef[] = [
     variant: 'cottage',
     signText: 'ABOUT ME',
     // ---------------------------------------------------------------
-    // About Me Flower Cottage. Three windows: who I am, my education,
-    // and what I'm looking for. Deliberately no technical skills list.
+    // About Me Flower Cottage. Two windows: who I am and my education.
+    // Deliberately no technical skills list, and no "looking for" window —
+    // that content lives on the Contact Post Office's Email window instead.
     // ---------------------------------------------------------------
     dialogue: null,
-    stations: [
+    stations: withTheme('about-cottage', [
       {
         id: 'introduction',
         label: windowLabel('about-cottage', 'introduction'),
@@ -188,7 +273,7 @@ export const LOCATIONS: LocationDef[] = [
         dialogue: (): Dialogue => ({
           id: 'about-introduction',
           title: windowLabel('about-cottage', 'introduction'),
-          lines: [content.about.headline, content.about.subheadline, ...content.about.paragraphs],
+          lines: content.about.introduction,
         }),
       },
       {
@@ -196,31 +281,18 @@ export const LOCATIONS: LocationDef[] = [
         label: windowLabel('about-cottage', 'uw-education'),
         accent: '#f2d65c',
         icon: 'cap',
-        plaque: 'UW / EDU',
+        plaque: 'UW & EDU',
         dialogue: (): Dialogue => ({
           id: 'about-education',
           title: windowLabel('about-cottage', 'uw-education'),
+          subtitle: content.education.school,
           lines: [
-            content.education.school,
             content.education.degree,
             `${content.education.focusArea} · Expected ${content.education.expectedGraduation} · GPA ${content.education.gpa}`,
           ],
         }),
       },
-      {
-        id: 'looking-for',
-        label: windowLabel('about-cottage', 'looking-for'),
-        accent: '#9ec9f5',
-        icon: 'compass',
-        plaque: 'LOOKING FOR',
-        dialogue: (): Dialogue => ({
-          id: 'about-looking-for',
-          title: windowLabel('about-cottage', 'looking-for'),
-          lines: [content.contact.blurb, content.contact.availability],
-          card: { tech: content.contact.rolesSeeking },
-        }),
-      },
-    ],
+    ]),
   },
   {
     symbol: 'R',
@@ -237,24 +309,27 @@ export const LOCATIONS: LocationDef[] = [
     // purple finance.
     // ---------------------------------------------------------------
     dialogue: null,
-    stations: experienceForLocation('current-roles-station').map((entry) => {
-      const visual: Record<string, { accent: string; icon: IconId; plaque: string }> = {
-        palana: { accent: '#4a7ac4', icon: 'shield', plaque: 'PALANA' },
-        ahf: { accent: '#e0a45b', icon: 'flag', plaque: 'AHF' },
-        winfo: { accent: '#9a6bcf', icon: 'coin', plaque: 'WINFO' },
-      }
-      const v = visual[entry.id] ?? { accent: '#4a7ac4', icon: 'shield' as IconId, plaque: entry.company }
-      return {
-        id: entry.id,
-        label: windowLabel('current-roles-station', entry.id),
-        ...v,
-        dialogue: (): Dialogue => {
-          const dialogue = experienceDialogue(entry.id)
-          if (!dialogue) throw new Error(`Current Roles station "${entry.id}" has no matching entry.`)
-          return dialogue
-        },
-      }
-    }),
+    stations: withTheme(
+      'current-roles-station',
+      experienceForLocation('current-roles-station').map((entry) => {
+        const visual: Record<string, { accent: string; icon: IconId; plaque: string }> = {
+          palana: { accent: '#4a7ac4', icon: 'shield', plaque: 'PALANA' },
+          ahf: { accent: '#e0a45b', icon: 'flag', plaque: 'AHF' },
+          winfo: { accent: '#9a6bcf', icon: 'coin', plaque: 'WINFO' },
+        }
+        const v = visual[entry.id] ?? { accent: '#4a7ac4', icon: 'shield' as IconId, plaque: entry.company }
+        return {
+          id: entry.id,
+          label: windowLabel('current-roles-station', entry.id),
+          ...v,
+          dialogue: (): Dialogue => {
+            const dialogue = experienceDialogue(entry.id)
+            if (!dialogue) throw new Error(`Current Roles station "${entry.id}" has no matching entry.`)
+            return dialogue
+          },
+        }
+      }),
+    ),
   },
   {
     symbol: 'E',
@@ -269,39 +344,44 @@ export const LOCATIONS: LocationDef[] = [
     // photo, since that project came directly out of this role.
     // ---------------------------------------------------------------
     dialogue: null,
-    stations: experienceForLocation('engineering-workshop').map((entry) => {
-      const visual: Record<string, { accent: string; icon: IconId; plaque: string }> = {
-        kaw: { accent: '#e0a45b', icon: 'gear', plaque: 'KAW' },
-        ilink: { accent: '#5bb0a0', icon: 'wrench', plaque: 'ILINK' },
-        goezz: { accent: '#d9483b', icon: 'bolt', plaque: 'GOEZZ' },
-      }
-      const v = visual[entry.id] ?? { accent: '#e0a45b', icon: 'gear' as IconId, plaque: entry.company }
-      if (entry.id === 'kaw') {
-        const project = findProject('kaw')
+    stations: withTheme(
+      'engineering-workshop',
+      experienceForLocation('engineering-workshop').map((entry) => {
+        const visual: Record<string, { accent: string; icon: IconId; plaque: string }> = {
+          kaw: { accent: '#e0a45b', icon: 'gear', plaque: 'KAW' },
+          ilink: { accent: '#5bb0a0', icon: 'wrench', plaque: 'ILINK' },
+          goezz: { accent: '#d9483b', icon: 'bolt', plaque: 'GOEZZ' },
+        }
+        const v = visual[entry.id] ?? { accent: '#e0a45b', icon: 'gear' as IconId, plaque: entry.company }
+        if (entry.id === 'kaw') {
+          const project = findProject('kaw')
+          return {
+            id: entry.id,
+            label: windowLabel('engineering-workshop', entry.id),
+            ...v,
+            dialogue: (): Dialogue => ({
+              id: 'engineering-kaw',
+              title: `${entry.role} — ${entry.company}`,
+              subtitle: `${entry.company} · ${entry.location} · ${entry.period}`,
+              lines: entry.bullets,
+              linesLabel: 'Highlights',
+              blocks: project.detail?.blocks,
+              card: { tech: project.tech, links: project.links },
+            }),
+          }
+        }
         return {
           id: entry.id,
           label: windowLabel('engineering-workshop', entry.id),
           ...v,
-          dialogue: (): Dialogue => ({
-            id: 'engineering-kaw',
-            title: `${entry.role} — ${entry.company}`,
-            lines: [`${entry.company} · ${entry.location} · ${entry.period}`, ...entry.bullets],
-            blocks: project.detail?.blocks,
-            card: { tech: project.tech, links: project.links },
-          }),
+          dialogue: (): Dialogue => {
+            const dialogue = experienceDialogue(entry.id)
+            if (!dialogue) throw new Error(`Engineering Workshop station "${entry.id}" has no matching entry.`)
+            return dialogue
+          },
         }
-      }
-      return {
-        id: entry.id,
-        label: windowLabel('engineering-workshop', entry.id),
-        ...v,
-        dialogue: (): Dialogue => {
-          const dialogue = experienceDialogue(entry.id)
-          if (!dialogue) throw new Error(`Engineering Workshop station "${entry.id}" has no matching entry.`)
-          return dialogue
-        },
-      }
-    }),
+      }),
+    ),
   },
   {
     symbol: 'S',
@@ -315,59 +395,63 @@ export const LOCATIONS: LocationDef[] = [
     // carries the chatbot project's tech and links.
     // ---------------------------------------------------------------
     dialogue: null,
-    stations: (() => {
-      const visual: Record<string, { accent: string; icon: IconId; plaque: string }> = {
-        'apollo-ai': { accent: '#8a6bcf', icon: 'robot', plaque: 'APOLLO AI' },
-        'cyber-minds': { accent: '#5bb0a0', icon: 'chat', plaque: 'CYBER MINDS' },
-        icode: { accent: '#e0a45b', icon: 'book', plaque: 'ICODE' },
-      }
-      const roleStations = experienceForLocation('ai-teaching-schoolhouse').map((entry) => {
-        const v = visual[entry.id] ?? { accent: '#8a6bcf', icon: 'robot' as IconId, plaque: entry.company }
-        if (entry.id === 'cyber-minds') {
-          const project = findProject('cyber-minds-chatbot')
+    stations: withTheme(
+      'ai-teaching-schoolhouse',
+      (() => {
+        const visual: Record<string, { accent: string; icon: IconId; plaque: string }> = {
+          'apollo-ai': { accent: '#8a6bcf', icon: 'robot', plaque: 'AAI' },
+          'cyber-minds': { accent: '#5bb0a0', icon: 'chat', plaque: 'CYBER MINDS' },
+          icode: { accent: '#e0a45b', icon: 'book', plaque: 'ICODE' },
+        }
+        const roleStations = experienceForLocation('ai-teaching-schoolhouse').map((entry) => {
+          const v = visual[entry.id] ?? { accent: '#8a6bcf', icon: 'robot' as IconId, plaque: entry.company }
+          if (entry.id === 'cyber-minds') {
+            const project = findProject('cyber-minds-chatbot')
+            return {
+              id: entry.id,
+              label: windowLabel('ai-teaching-schoolhouse', entry.id),
+              ...v,
+              dialogue: (): Dialogue => ({
+                id: 'schoolhouse-cyber-minds',
+                title: `${entry.role} — ${entry.company}`,
+                subtitle: `${entry.company} · ${entry.location} · ${entry.period}`,
+                lines: entry.bullets,
+                linesLabel: 'Highlights',
+                card: { tech: project.tech, links: project.links },
+              }),
+            }
+          }
           return {
             id: entry.id,
             label: windowLabel('ai-teaching-schoolhouse', entry.id),
             ...v,
-            dialogue: (): Dialogue => ({
-              id: 'schoolhouse-cyber-minds',
-              title: `${entry.role} — ${entry.company}`,
-              lines: [`${entry.company} · ${entry.location} · ${entry.period}`, ...entry.bullets],
-              card: { tech: project.tech, links: project.links },
-            }),
+            dialogue: (): Dialogue => {
+              const dialogue = experienceDialogue(entry.id)
+              if (!dialogue) throw new Error(`Schoolhouse station "${entry.id}" has no matching entry.`)
+              return dialogue
+            },
           }
-        }
-        return {
-          id: entry.id,
-          label: windowLabel('ai-teaching-schoolhouse', entry.id),
-          ...v,
-          dialogue: (): Dialogue => {
-            const dialogue = experienceDialogue(entry.id)
-            if (!dialogue) throw new Error(`Schoolhouse station "${entry.id}" has no matching entry.`)
-            return dialogue
-          },
-        }
-      })
+        })
 
-      const martialArts = content.achievements.find((item) => item.id === 'martial-arts')
-      if (!martialArts) throw new Error('Schoolhouse "martial-arts" station has no matching achievement.')
-      const martialArtsStation: StationDef = {
-        id: martialArts.id,
-        label: windowLabel('ai-teaching-schoolhouse', 'martial-arts'),
-        accent: '#d9483b',
-        icon: 'belt',
-        plaque: 'MARTIAL ARTS',
-        dialogue: (): Dialogue => ({
-          id: 'schoolhouse-martial-arts',
-          title: martialArts.title,
-          lines: [
-            martialArts.period ? `${martialArts.detail} (${martialArts.period})` : martialArts.detail,
-          ],
-        }),
-      }
+        const martialArts = content.achievements.find((item) => item.id === 'martial-arts')
+        if (!martialArts) throw new Error('Schoolhouse "martial-arts" station has no matching achievement.')
+        const martialArtsStation: StationDef = {
+          id: martialArts.id,
+          label: windowLabel('ai-teaching-schoolhouse', 'martial-arts'),
+          accent: '#d9483b',
+          icon: 'belt',
+          plaque: 'DOJO',
+          dialogue: (): Dialogue => ({
+            id: 'schoolhouse-martial-arts',
+            title: martialArts.title,
+            subtitle: martialArts.period || undefined,
+            lines: [martialArts.detail],
+          }),
+        }
 
-      return [...roleStations, martialArtsStation]
-    })(),
+        return [...roleStations, martialArtsStation]
+      })(),
+    ),
   },
   {
     symbol: 'O',
@@ -380,25 +464,31 @@ export const LOCATIONS: LocationDef[] = [
     // complete long-form write-up in one scroll.
     // ---------------------------------------------------------------
     dialogue: null,
-    stations: projectsForLocation('mobile-innovation-observatory').map((project, i) => {
-      const visual = [
-        { accent: '#6b8ecf', icon: 'pin' as IconId, plaque: 'FINDAR' },
-        { accent: '#9a6bcf', icon: 'phone' as IconId, plaque: 'BUMP' },
-      ]
-      const v = visual[i] ?? { accent: '#6b8ecf', icon: 'pin' as IconId, plaque: project.title }
-      return {
-        id: project.id,
-        label: windowLabel('mobile-innovation-observatory', project.id),
-        ...v,
-        dialogue: (): Dialogue => ({
+    stations: withTheme(
+      'mobile-innovation-observatory',
+      projectsForLocation('mobile-innovation-observatory').map((project, i) => {
+        const visual = [
+          { accent: '#6b8ecf', icon: 'pin' as IconId, plaque: 'FINDAR' },
+          { accent: '#9a6bcf', icon: 'phone' as IconId, plaque: 'BUMP' },
+        ]
+        const v = visual[i] ?? { accent: '#6b8ecf', icon: 'pin' as IconId, plaque: project.title }
+        return {
           id: project.id,
-          title: project.title,
-          lines: [project.blurb, join(project.built), project.learned],
-          blocks: project.detail?.blocks,
-          card: { tech: project.tech, links: project.links },
-        }),
-      }
-    }),
+          label: windowLabel('mobile-innovation-observatory', project.id),
+          ...v,
+          dialogue: (): Dialogue => ({
+            id: project.id,
+            title: project.title,
+            subtitle: project.blurb,
+            lines: project.built,
+            linesLabel: 'Highlights',
+            note: { label: 'What I Learned', text: project.learned },
+            blocks: project.detail?.blocks,
+            card: { tech: project.tech, links: project.links },
+          }),
+        }
+      }),
+    ),
   },
   {
     symbol: 'D',
@@ -412,30 +502,31 @@ export const LOCATIONS: LocationDef[] = [
     // directly from its own source, per Phase 1's inspection.
     // ---------------------------------------------------------------
     dialogue: null,
-    stations: projectsForLocation('developer-tools-workshop').map((project) => {
-      const visual: Record<string, { accent: string; icon: IconId; plaque: string }> = {
-        'github-extension': { accent: '#e88ec0', icon: 'branch', plaque: 'GITHUB EXT.' },
-        'cyber-study-tracker': { accent: '#8a6bcf', icon: 'terminal', plaque: 'TRACKER' },
-      }
-      const v = visual[project.id] ?? { accent: '#e88ec0', icon: 'branch' as IconId, plaque: project.title }
-      return {
-        id: project.id,
-        label: windowLabel('developer-tools-workshop', project.id),
-        ...v,
-        dialogue: (): Dialogue => ({
+    stations: withTheme(
+      'developer-tools-workshop',
+      projectsForLocation('developer-tools-workshop').map((project) => {
+        const visual: Record<string, { accent: string; icon: IconId; plaque: string }> = {
+          'github-extension': { accent: '#e88ec0', icon: 'branch', plaque: 'GITHUB EXT' },
+          'cyber-study-tracker': { accent: '#8a6bcf', icon: 'terminal', plaque: 'TRACKER' },
+        }
+        const v = visual[project.id] ?? { accent: '#e88ec0', icon: 'branch' as IconId, plaque: project.title }
+        return {
           id: project.id,
-          title: project.title,
-          lines: [
-            project.blurb,
-            join(project.built),
-            project.learned,
-            ...(project.contentTodo ? [project.contentTodo] : []),
-          ],
-          blocks: project.detail?.blocks,
-          card: { tech: project.tech, links: project.links },
-        }),
-      }
-    }),
+          label: windowLabel('developer-tools-workshop', project.id),
+          ...v,
+          dialogue: (): Dialogue => ({
+            id: project.id,
+            title: project.title,
+            subtitle: project.blurb,
+            lines: [...project.built, ...(project.contentTodo ? [project.contentTodo] : [])],
+            linesLabel: 'Highlights',
+            note: { label: 'What I Learned', text: project.learned },
+            blocks: project.detail?.blocks,
+            card: { tech: project.tech, links: project.links },
+          }),
+        }
+      }),
+    ),
   },
   {
     symbol: 'G',
@@ -450,31 +541,32 @@ export const LOCATIONS: LocationDef[] = [
     // Kept small and light-blue with trees around it in village.ts.
     // ---------------------------------------------------------------
     dialogue: null,
-    stations: projectsForLocation('community-impact-greenhouse').map((project) => {
-      const visual: Record<string, { accent: string; icon: IconId; plaque: string }> = {
-        terralend: { accent: '#6f9a45', icon: 'leaf', plaque: 'TERRALEND' },
-        unearthed: { accent: '#a67c52', icon: 'fossil', plaque: 'DINOS' },
-        'winfo-website': { accent: '#6b8ecf', icon: 'globe', plaque: 'WINFO WEBSITE' },
-      }
-      const v = visual[project.id] ?? { accent: '#6f9a45', icon: 'leaf' as IconId, plaque: project.title }
-      return {
-        id: project.id,
-        label: windowLabel('community-impact-greenhouse', project.id),
-        ...v,
-        dialogue: (): Dialogue => ({
+    stations: withTheme(
+      'community-impact-greenhouse',
+      projectsForLocation('community-impact-greenhouse').map((project) => {
+        const visual: Record<string, { accent: string; icon: IconId; plaque: string }> = {
+          terralend: { accent: '#6f9a45', icon: 'leaf', plaque: 'TERRALEND' },
+          unearthed: { accent: '#a67c52', icon: 'fossil', plaque: 'DINOS' },
+          'winfo-website': { accent: '#6b8ecf', icon: 'globe', plaque: 'WINFO SITE' },
+        }
+        const v = visual[project.id] ?? { accent: '#6f9a45', icon: 'leaf' as IconId, plaque: project.title }
+        return {
           id: project.id,
-          title: project.title,
-          lines: [
-            project.blurb,
-            join(project.built),
-            project.learned,
-            ...(project.contentTodo ? [project.contentTodo] : []),
-          ],
-          blocks: project.detail?.blocks,
-          card: { tech: project.tech, links: project.links },
-        }),
-      }
-    }),
+          label: windowLabel('community-impact-greenhouse', project.id),
+          ...v,
+          dialogue: (): Dialogue => ({
+            id: project.id,
+            title: project.title,
+            subtitle: project.blurb,
+            lines: [...project.built, ...(project.contentTodo ? [project.contentTodo] : [])],
+            linesLabel: 'Highlights',
+            note: { label: 'What I Learned', text: project.learned },
+            blocks: project.detail?.blocks,
+            card: { tech: project.tech, links: project.links },
+          }),
+        }
+      }),
+    ),
   },
   {
     symbol: 'F',
@@ -491,10 +583,10 @@ export const LOCATIONS: LocationDef[] = [
     // plot opening the mailto suggestion box in-world.
     // ---------------------------------------------------------------
     dialogue: null,
-    stations: [
+    stations: withTheme('growth-farm', [
       ...content.growth.plans.map((plan, i) => {
         const visual = [
-          { accent: '#e0a45b', icon: 'bolt' as IconId, plaque: 'HACKATHON' },
+          { accent: '#e0a45b', icon: 'bolt' as IconId, plaque: 'HACK' },
           { accent: '#5bb0a0', icon: 'server' as IconId, plaque: 'HOME LAB' },
           { accent: '#e88ec0', icon: 'branch' as IconId, plaque: 'GH EXT' },
         ]
@@ -506,7 +598,9 @@ export const LOCATIONS: LocationDef[] = [
           dialogue: (): Dialogue => ({
             id: `growth-${plan.id}`,
             title: plan.title,
-            lines: plan.paragraphs,
+            subtitle: plan.paragraphs[0],
+            lines: [],
+            note: plan.paragraphs[1] ? { label: 'Next Step', text: plan.paragraphs[1] } : undefined,
           }),
         }
       }),
@@ -515,15 +609,16 @@ export const LOCATIONS: LocationDef[] = [
         label: 'Suggest Something',
         accent: '#9a6bcf',
         icon: 'mail',
-        plaque: 'SUGGEST',
+        plaque: 'IDEA',
         dialogue: (): Dialogue => ({
           id: 'growth-suggestion',
           title: 'Suggest Something',
-          lines: [content.growth.intro],
+          subtitle: content.growth.intro,
+          lines: [],
           suggestionForm: true,
         }),
       },
-    ],
+    ]),
   },
   {
     symbol: 'X',
@@ -534,10 +629,11 @@ export const LOCATIONS: LocationDef[] = [
     contextualAction: 'sendMail',
     // ---------------------------------------------------------------
     // Contact Post Office. Email, LinkedIn, GitHub — each its own
-    // window rather than one crowded mailbox card.
+    // window, rendered as an attractive contact panel (icon, short
+    // description, clear action button) rather than a crowded mailbox.
     // ---------------------------------------------------------------
     dialogue: null,
-    stations: [
+    stations: withTheme('contact-post-office', [
       {
         id: 'email',
         label: windowLabel('contact-post-office', 'email'),
@@ -547,10 +643,17 @@ export const LOCATIONS: LocationDef[] = [
         dialogue: (): Dialogue => ({
           id: 'contact-email',
           title: windowLabel('contact-post-office', 'email'),
-          lines: [content.contact.blurb, content.contact.location],
-          card: {
-            links: [{ label: content.contact.email, href: `mailto:${content.contact.email}` }],
-          },
+          subtitle: content.contact.location,
+          lines: [],
+          contact: [
+            {
+              icon: 'mail',
+              label: content.contact.email,
+              description: content.contact.blurb,
+              actionLabel: 'Send an Email',
+              href: `mailto:${content.contact.email}`,
+            },
+          ],
         }),
       },
       {
@@ -558,12 +661,21 @@ export const LOCATIONS: LocationDef[] = [
         label: windowLabel('contact-post-office', 'linkedin'),
         accent: '#4a7ac4',
         icon: 'link',
-        plaque: 'LINKEDIN',
+        plaque: 'LINKED',
         dialogue: (): Dialogue => ({
           id: 'contact-linkedin',
           title: windowLabel('contact-post-office', 'linkedin'),
-          lines: [getVillageLocation('contact-post-office').windows.find((w) => w.id === 'linkedin')!.description],
-          card: { links: [{ label: 'LinkedIn', href: content.contact.linkedin }] },
+          lines: [],
+          contact: [
+            {
+              icon: 'link',
+              label: 'LinkedIn',
+              description: getVillageLocation('contact-post-office').windows.find((w) => w.id === 'linkedin')!
+                .description,
+              actionLabel: 'Open LinkedIn',
+              href: content.contact.linkedin,
+            },
+          ],
         }),
       },
       {
@@ -575,11 +687,20 @@ export const LOCATIONS: LocationDef[] = [
         dialogue: (): Dialogue => ({
           id: 'contact-github',
           title: windowLabel('contact-post-office', 'github'),
-          lines: [getVillageLocation('contact-post-office').windows.find((w) => w.id === 'github')!.description],
-          card: { links: [{ label: 'GitHub', href: content.contact.github }] },
+          lines: [],
+          contact: [
+            {
+              icon: 'branch',
+              label: 'GitHub',
+              description: getVillageLocation('contact-post-office').windows.find((w) => w.id === 'github')!
+                .description,
+              actionLabel: 'Open GitHub',
+              href: content.contact.github,
+            },
+          ],
         }),
       },
-    ],
+    ]),
   },
 ]
 
@@ -588,23 +709,34 @@ export const BUILDING_SYMBOLS: ReadonlySet<string> = new Set(
   LOCATIONS.map((location) => location.symbol),
 )
 
+/** Every `LocationDef`, keyed by its display name, so a signpost (which only knows a village location id) can find the matching building's stations and borrow their accent/icon for its legend markers. */
+const LOCATIONS_BY_NAME = new Map(LOCATIONS.map((location) => [location.name, location]))
+
 /** One waypost: a single solid map tile with a themed dialogue, no card. */
 export interface SignpostDef {
   /** The character used for this signpost in the map in `village.ts`. */
   symbol: string
   /** The location's full name, shown as the overlay title. */
   title: string
-  /** The location's one-line description, followed by its window legend. */
-  lines: string[]
+  /** The village location this signpost describes — threaded through so its popup shares that location's theme. */
+  locationId: string
+  /** The location's one-line description, shown as the popup's subtitle. */
+  subtitle: string
+  /** The window/plot legend: name, description, and a matching colour/icon marker per entry. */
+  legend: LegendEntry[]
   /**
    * Short heading painted on the signpost's world sprite — per spec, the
    * in-world sign shows only this, never the full description/legend above.
    */
   heading: string
-  /** Board colour, matching the location's building wall colour. */
+  /** Board colour for the in-world sprite, matching the location's building wall colour. Unchanged by the popup redesign. */
   accent: string
-  /** Small pixel icon representing the whole location. */
+  /** Small pixel icon for the in-world sprite. Unchanged by the popup redesign. */
   icon: IconId
+  /** Popup accent colour — the same subtle theme this location's own building popups use. */
+  themeAccent: string
+  /** Popup header icon — the same subtle theme this location's own building popups use. */
+  themeIcon: IconId
 }
 
 /**
@@ -613,7 +745,9 @@ export interface SignpostDef {
  * `heading` is deliberately short — this is the only text painted on the
  * world sprite (per spec, the in-world sign shows the location heading
  * alone, never the full name/description). It matches each building's
- * facade `signText` in `LOCATIONS` above.
+ * facade `signText` in `LOCATIONS` above. `accent`/`icon` here are the
+ * sprite's board colour and icon — kept exactly as before this phase, since
+ * the popup instead reads `themeAccent`/`themeIcon` (see `LOCATION_THEME`).
  */
 const SIGNPOST_LOCATIONS: {
   symbol: string
@@ -671,24 +805,38 @@ const SIGNPOST_LOCATIONS: {
 
 /**
  * Every signpost on the map, one per location, built straight from
- * `content.villageLocations` — heading, one-line description, and a legend
- * of every window/station/plot the visitor is about to walk into. The
- * `heading` field alone is what gets painted on the world sprite; `lines`
- * (the full description + legend) is reserved for the overlay opened by
+ * `content.villageLocations` — a short description and a legend of every
+ * window/station/plot the visitor is about to walk into, each legend entry
+ * borrowing its matching station's own accent/icon so the popup marker and
+ * the window you'll actually find inside look like the same thing. The
+ * `heading`/`accent`/`icon` fields alone are what get painted on the world
+ * sprite; `subtitle`/`legend` are reserved for the overlay opened by
  * pressing `E`.
  */
 export const SIGNPOSTS: SignpostDef[] = SIGNPOST_LOCATIONS.map(({ symbol, locationId, heading, accent, icon }) => {
   const village = getVillageLocation(locationId)
+  const buildingDef = LOCATIONS_BY_NAME.get(village.name)
+  const theme = LOCATION_THEME[locationId] ?? { accent, icon }
   return {
     symbol,
     title: village.name,
+    locationId,
+    subtitle: village.signDescription,
+    legend: village.windows.map((window) => {
+      const station = buildingDef?.stations?.find((s) => s.id === window.id)
+      return {
+        id: window.id,
+        label: window.label,
+        description: window.description,
+        accent: station?.accent ?? theme.accent,
+        icon: station?.icon ?? theme.icon,
+      }
+    }),
     heading,
     accent,
     icon,
-    lines: [
-      village.signDescription,
-      ...village.windows.map((window) => `${window.label} — ${window.description}`),
-    ],
+    themeAccent: theme.accent,
+    themeIcon: theme.icon,
   }
 })
 

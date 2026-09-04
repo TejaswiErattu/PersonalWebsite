@@ -168,12 +168,28 @@ function measurePixelText(text: string, scale: number): number {
   return Math.max(0, width - scale)
 }
 
-/** Greedily wraps `text` onto lines no longer than `maxChars` characters. */
+/**
+ * Greedily wraps `text` onto lines no longer than `maxChars` characters.
+ *
+ * A single word longer than `maxChars` (a long project name with no spaces,
+ * e.g. "TERRALEND") is hard-broken into `maxChars`-sized chunks rather than
+ * left on its own oversized line — the plaques and signs this feeds are
+ * fixed-width boxes, so an unbroken overlong word would run past the box's
+ * edge instead of wrapping inside it.
+ */
 function wrapText(text: string, maxChars: number): string[] {
   const words = text.split(/\s+/).filter(Boolean)
   const lines: string[] = []
   let current = ''
   for (const word of words) {
+    if (word.length > maxChars) {
+      if (current) {
+        lines.push(current)
+        current = ''
+      }
+      for (let i = 0; i < word.length; i += maxChars) lines.push(word.slice(i, i + maxChars))
+      continue
+    }
     const next = current ? `${current} ${word}` : word
     if (next.length > maxChars && current) {
       lines.push(current)
@@ -542,8 +558,13 @@ function drawFacadeSign(
   const textWidth = measurePixelText(signText, 1)
   const boardWidth = Math.min(width - 8, textWidth + 10)
   const boardX = (width - boardWidth) / 2
-  fill(ctx, '#f4e9c8', boardX, 2, boardWidth, 9)
-  stroke(ctx, outline, boardX, 2, boardWidth, 9)
+  // Height follows however many lines the text actually wraps to, so a sign
+  // squeezed onto a narrow facade (forcing a second line) still fits fully
+  // inside its own board instead of spilling past a fixed one-line height.
+  const lines = wrapText(signText, Math.max(3, Math.floor((boardWidth - 4) / 4)))
+  const boardHeight = 4 + lines.length * 7
+  fill(ctx, '#f4e9c8', boardX, 2, boardWidth, boardHeight)
+  stroke(ctx, outline, boardX, 2, boardWidth, boardHeight)
   drawWrappedText(ctx, signText, width / 2, 4, boardWidth - 4, outline, 1)
 }
 
@@ -598,6 +619,50 @@ function drawDoor(
   return { doorX, doorY, doorHeight }
 }
 
+/**
+ * A climbing vine hugging one wall edge: a wandering two-pixel-wide green
+ * stem with leaves branching off it and the occasional small bloom, rather
+ * than a column of unconnected coloured dots. `edgeX` is the stem's starting
+ * column and `inward` is which way it leans away from the corner (+1 for a
+ * vine climbing the left wall, -1 for the right), so the same helper draws
+ * both corners as mirror images of each other.
+ */
+function drawVine(
+  ctx: CanvasRenderingContext2D,
+  edgeX: number,
+  top: number,
+  bottom: number,
+  inward: 1 | -1,
+): void {
+  const stem = '#3f7a35'
+  const leaf = '#5a9a55'
+  const blooms = ['#e88ec0', '#f2d65c', '#9ec9f5']
+  let x = edgeX
+  let bloomIndex = 0
+  let step = 0
+  for (let y = top; y < bottom; y += 3) {
+    fill(ctx, stem, x, y, 2, 3)
+    // A gentle side-to-side wander, kept within a couple of pixels of the
+    // corner so the vine never strays into a window.
+    if (step % 4 === 1) x += inward
+    if (step % 4 === 3) x -= inward
+    // A leaf most segments, alternating which side it sprouts from.
+    if (step % 2 === 0) {
+      fill(ctx, leaf, x + inward * 2, y, 2, 2)
+    } else {
+      fill(ctx, leaf, x - inward, y + 1, 1, 2)
+    }
+    // A small bloom every third leafed segment.
+    if (step % 6 === 4) {
+      const fx = x - inward
+      fill(ctx, blooms[bloomIndex % blooms.length], fx, y - 1, 2, 2)
+      fill(ctx, '#f6f2e8', fx, y, 1, 1)
+      bloomIndex++
+    }
+    step++
+  }
+}
+
 /** Per-variant roofline and decoration drawn once the shell + windows exist. */
 function drawVariantDecoration(
   ctx: CanvasRenderingContext2D,
@@ -610,11 +675,12 @@ function drawVariantDecoration(
   const outline = palette.outline
   switch (variant) {
     case 'cottage': {
-      // Vines climbing the corners and a flower box under the sign.
-      for (let y = roofHeight + 2; y < height - 4; y += 5) {
-        fill(ctx, '#4a7a35', 2, y, 2, 3)
-        fill(ctx, '#4a7a35', width - 4, y, 2, 3)
-      }
+      // Vines climbing both corners: connected stems with branching leaves
+      // and small blooms, rather than a column of loose coloured dots.
+      drawVine(ctx, 2, roofHeight + 2, height - 8, 1)
+      drawVine(ctx, width - 5, roofHeight + 2, height - 8, -1)
+
+      // Flower box under the sign.
       const boxY = height - 6
       fill(ctx, '#8a5a2b', 6, boxY, width - 12, 4)
       const petals = ['#e88ec0', '#f2d65c', '#9ec9f5']
@@ -624,16 +690,58 @@ function drawVariantDecoration(
       break
     }
     case 'trainStation': {
-      // Flat platform canopy and a clock. The actual track runs in the
-      // world above the building's roofline (see `createGame.ts`'s
-      // `TRAIN_TRACK_OFFSET`), so the facade carries no rail of its own —
-      // drawing one at the base would point at open street where no train
-      // ever runs.
+      // A canopy roof: a trim line at the eave held up on two corner posts
+      // running down to the platform, clear of the windows between them.
+      // The actual track runs in the world above the building's roofline
+      // (see `createGame.ts`'s `TRAIN_TRACK_OFFSET`), so the facade carries
+      // no rail up there of its own.
       fill(ctx, palette.roofShade, 0, roofHeight, width, 2)
-      fill(ctx, '#f4e9c8', width / 2 - 6, 3, 12, 12)
-      stroke(ctx, outline, width / 2 - 6, 3, 12, 12)
-      fill(ctx, outline, width / 2 - 1, 6, 1, 4)
-      fill(ctx, outline, width / 2, 8, 3, 1)
+      const platformY = height - 10
+      for (const postX of [4, width - 8]) {
+        fill(ctx, palette.roofShade, postX, roofHeight + 2, 4, platformY - roofHeight - 2)
+        stroke(ctx, outline, postX, roofHeight + 2, 4, platformY - roofHeight - 2)
+        // Angled brace bracing the post back to the wall.
+        fill(ctx, palette.roofShade, postX + (postX < width / 2 ? 4 : -3), roofHeight + 2, 3, 2)
+      }
+
+      // Centred station clock, in the band directly under the facade sign.
+      const clockSize = 14
+      const clockX = Math.round(width / 2 - clockSize / 2)
+      const clockY = 13
+      fill(ctx, '#f4e9c8', clockX, clockY, clockSize, clockSize)
+      stroke(ctx, outline, clockX, clockY, clockSize, clockSize)
+      const cx = Math.round(width / 2)
+      const cy = clockY + clockSize / 2
+      fill(ctx, outline, cx, clockY + 2, 1, 4)
+      fill(ctx, outline, cx, cy, 4, 1)
+      fill(ctx, outline, cx, clockY + 1, 1, 1)
+      fill(ctx, outline, cx, clockY + clockSize - 2, 1, 1)
+      fill(ctx, outline, clockX + 1, cy, 1, 1)
+      fill(ctx, outline, clockX + clockSize - 2, cy, 1, 1)
+
+      // Platform: a raised concrete edge with a painted safety line.
+      fill(ctx, '#9a958a', 0, platformY, width, 7)
+      fill(ctx, '#7a766c', 0, platformY, width, 2)
+      fill(ctx, '#e0c04a', 0, platformY + 2, width, 1)
+
+      // A short run of rail and sleepers along the very base, as if the
+      // platform edge drops straight to the track.
+      const railY = height - 3
+      fill(ctx, '#6b4a30', 0, railY, width, 3)
+      for (let x = 1; x + 3 <= width; x += 8) fill(ctx, '#4a3320', x, railY, 3, 3)
+      fill(ctx, '#8a8a86', 0, railY, width, 1)
+      fill(ctx, '#8a8a86', 0, railY + 2, width, 1)
+
+      // A bench in the gap between the left post and the first plaque...
+      fill(ctx, '#6b4a30', 9, platformY - 6, 10, 2)
+      fill(ctx, '#6b4a30', 10, platformY - 4, 1, 4)
+      fill(ctx, '#6b4a30', 17, platformY - 4, 1, 4)
+      fill(ctx, '#4a3320', 9, platformY - 9, 2, 3)
+      // ...and a stack of luggage in the matching gap on the right.
+      fill(ctx, '#8a3a3a', width - 18, platformY - 5, 9, 5)
+      stroke(ctx, outline, width - 18, platformY - 5, 9, 5)
+      fill(ctx, '#5b6b7a', width - 16, platformY - 9, 7, 5)
+      stroke(ctx, outline, width - 16, platformY - 9, 7, 5)
       break
     }
     case 'workshop': {
@@ -737,7 +845,11 @@ function drawVariantDecoration(
       // `postOfficeChimneyMouth()` below so the animation's spawn point and
       // the drawn flue can never drift apart.
       const stackX = width - CHIMNEY_INSET
-      const stackBottom = roofHeight + 3
+      // Stops flush with the roofline rather than a few pixels past it —
+      // extending past `roofHeight` used to bury the chimney's base in the
+      // wall below, reading as if it were stuck inside the building instead
+      // of rising off the roof.
+      const stackBottom = roofHeight
       const brick = '#8a4a3a'
       const brickShade = darken(brick, 0.7)
       const mortar = '#cbb9a8'
@@ -782,18 +894,22 @@ export function createBuildingSprite(
   const ctx = newCanvas(width, height)
   const roofHeight = drawHouseShell(ctx, width, height, palette)
 
-  // A window lands exactly on the door's centre whenever a station sits at
-  // `width / 2` — true for the middle window of any odd station count, since
-  // both are centred the same way. In that case skip the decorative door
-  // rather than the window: see `drawDoor()`'s doc comment.
+  // A window (or the plaque hanging beneath it) can land on the door's
+  // centre — always true for the middle window of an odd station count,
+  // since both are centred at `width / 2`, but also possible for an even
+  // count whose two closest windows sit near enough together that their
+  // plaques bleed into the gap between them. Either way, skip the
+  // decorative door rather than let it cut through the thing that's
+  // actually interactive: see `drawDoor()`'s doc comment.
   const doorCenter = width / 2
-  const windowOnDoor = windows.some(
-    (_, i) => Math.abs(stationX(i, windows.length, width) - doorCenter) < DOOR_WIDTH / 2 + WINDOW_SIZE / 2,
-  )
+  const maxPlaqueWidth = Math.max(24, width / (windows.length + 1) - 4)
+  const windowOnDoor = windows.some((_, i) => {
+    const halfSpan = Math.max(WINDOW_SIZE, maxPlaqueWidth) / 2
+    return Math.abs(stationX(i, windows.length, width) - doorCenter) < DOOR_WIDTH / 2 + halfSpan
+  })
   const { doorY } = drawDoor(ctx, width, height, roofHeight, palette, windowOnDoor)
 
   const windowY = roofHeight + Math.max(6, Math.round((doorY - roofHeight - WINDOW_SIZE) / 2) - 6)
-  const maxPlaqueWidth = Math.max(24, width / (windows.length + 1) - 4)
   windows.forEach((visual, i) => {
     const x = stationX(i, windows.length, width)
     drawWindow(ctx, x, windowY, visual, palette.outline, palette.window, maxPlaqueWidth)
@@ -1084,6 +1200,62 @@ export function createBushSprite(): SpriteCanvas {
   fill(ctx, mid, 2, 7, 12, 6)
   fill(ctx, dark, 3, 13, 10, 1)
   fill(ctx, light, 4, 7, 4, 3)
+
+  return ctx.canvas
+}
+
+/**
+ * A small pixel tree: a brown trunk under a layered, rounded green canopy.
+ * Replaces the flat green square `T` tiles used to draw everywhere a tree
+ * belongs — the forest border and the greenhouse's own yard — so a "tree"
+ * actually reads as one instead of as a solid colour block. Solidity is
+ * unaffected: collision still comes from the map symbol, not this sprite.
+ */
+export function createTreeSprite(): SpriteCanvas {
+  const ctx = newCanvas(GROUND_TILE_SIZE, GROUND_TILE_SIZE)
+  const dark = '#1f4a28'
+  const mid = '#2f6b3a'
+  const light = '#4a8a4a'
+  const trunk = '#5a3d28'
+  const trunkShade = '#4a3320'
+
+  // Trunk.
+  fill(ctx, trunk, 7, 12, 3, 4)
+  fill(ctx, trunkShade, 9, 12, 1, 4)
+
+  // Layered canopy, widest through the middle so it reads as a rounded crown.
+  fill(ctx, dark, 5, 1, 6, 2)
+  fill(ctx, dark, 3, 3, 10, 2)
+  fill(ctx, mid, 2, 5, 12, 6)
+  fill(ctx, dark, 2, 10, 12, 2)
+  fill(ctx, light, 4, 5, 4, 3)
+  fill(ctx, light, 3, 8, 3, 2)
+
+  return ctx.canvas
+}
+
+/**
+ * A small tended planting bed: turned soil in a low border, with tidy rows
+ * of sprouts. Distinct from the ambient flower cluster and bush tiles so a
+ * "planting bed" in a yard actually reads as one — a deliberately cultivated
+ * row rather than a wild flower or shrub. Always non-solid, like the other
+ * ground accents.
+ */
+export function createPlantingBedSprite(): SpriteCanvas {
+  const ctx = newCanvas(GROUND_TILE_SIZE, GROUND_TILE_SIZE)
+  const soil = '#6b4a30'
+  const soilDark = '#5a3d28'
+  const sprout = '#5a9a55'
+  const sproutDark = '#3f7a35'
+
+  fill(ctx, soil, 1, 2, 14, 12)
+  stroke(ctx, soilDark, 1, 2, 14, 12)
+  for (let y = 4; y < 14; y += 4) fill(ctx, soilDark, 2, y, 12, 1)
+  for (let x = 3; x < 13; x += 4) {
+    fill(ctx, sprout, x, 3, 1, 2)
+    fill(ctx, sproutDark, x, 7, 1, 2)
+    fill(ctx, sprout, x, 11, 1, 2)
+  }
 
   return ctx.canvas
 }

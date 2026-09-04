@@ -31,6 +31,21 @@ const FADE_SECONDS = 1.2
 /** The pad chord, in Hz. A low open fifth plus a tenth — calm, not melodic. */
 const PAD_FREQUENCIES = [110, 164.81, 277.18]
 
+/**
+ * A soft, sparse melody over the pad — the bed's "playful" layer. Notes are
+ * an A major pentatonic (the pad's own A-E-C# chord plus its second and
+ * sixth), so nothing ever clashes with the sustained drone underneath.
+ * Picked at random, spaced several seconds apart, so it reads as an
+ * occasional wind-chime or music-box sparkle rather than a melody loop —
+ * cheerful and cozy without becoming something a visitor has to tune out.
+ */
+const SPARKLE_NOTES = [440, 493.88, 554.37, 659.25, 739.99, 880]
+const SPARKLE_MIN_GAP_SECONDS = 3.5
+const SPARKLE_MAX_GAP_SECONDS = 7.5
+/** Peak volume of one sparkle note, pre-master-gain. Quieter than a blip. */
+const SPARKLE_PEAK_GAIN = 0.16
+const SPARKLE_DECAY_SECONDS = 1.4
+
 export interface SoundEngine {
   /** Starts (or resumes) the looping background bed. */
   startBed: () => Promise<void>
@@ -110,6 +125,52 @@ export function createSoundEngine(): SoundEngine {
     master.gain.linearRampToValueAtTime(target, now + FADE_SECONDS)
   }
 
+  // The sparkle layer's own scheduler — a plain `setTimeout` chain rather
+  // than anything Web-Audio-clocked, since a few seconds of jitter on an
+  // ambient chime nobody is counting is unnoticeable. Tracked so `stopBed()`
+  // and `dispose()` can cancel the next tick and truly go silent instead of
+  // firing one more note after the bed has faded out.
+  let sparkleTimeoutId: ReturnType<typeof setTimeout> | null = null
+
+  const playSparkle = (): void => {
+    // Same guard as `blip`/`trainHorn` — skip rather than schedule a voice
+    // that would play into a faded-out or suspended context.
+    if (!bedWanted || context.state !== 'running') return
+
+    const now = context.currentTime
+    const hz = SPARKLE_NOTES[Math.floor(Math.random() * SPARKLE_NOTES.length)]
+
+    const osc = context.createOscillator()
+    osc.type = 'sine'
+    osc.frequency.setValueAtTime(hz, now)
+
+    const envelope = context.createGain()
+    envelope.gain.setValueAtTime(0, now)
+    envelope.gain.linearRampToValueAtTime(SPARKLE_PEAK_GAIN, now + 0.05)
+    envelope.gain.exponentialRampToValueAtTime(0.0001, now + SPARKLE_DECAY_SECONDS)
+
+    osc.connect(envelope)
+    envelope.connect(master)
+    osc.start(now)
+    osc.stop(now + SPARKLE_DECAY_SECONDS + 0.05)
+    osc.onended = () => {
+      osc.disconnect()
+      envelope.disconnect()
+    }
+  }
+
+  const scheduleSparkle = (): void => {
+    const gapSeconds =
+      SPARKLE_MIN_GAP_SECONDS + Math.random() * (SPARKLE_MAX_GAP_SECONDS - SPARKLE_MIN_GAP_SECONDS)
+    sparkleTimeoutId = setTimeout(() => {
+      playSparkle()
+      // Re-arms itself only while the bed is still wanted, so muting during
+      // the gap between two notes stops the chain rather than firing once
+      // more and rescheduling again.
+      if (bedWanted) scheduleSparkle()
+    }, gapSeconds * 1000)
+  }
+
   return {
     startBed: async () => {
       bedWanted = true
@@ -128,11 +189,18 @@ export function createSoundEngine(): SoundEngine {
       }
 
       applyMasterGain()
+      // Guarded so a second `startBed()` (unmute → mute → unmute) can't
+      // stack a second, faster-firing sparkle chain on top of the first.
+      if (sparkleTimeoutId === null) scheduleSparkle()
     },
 
     stopBed: () => {
       bedWanted = false
       applyMasterGain()
+      if (sparkleTimeoutId !== null) {
+        clearTimeout(sparkleTimeoutId)
+        sparkleTimeoutId = null
+      }
     },
 
     blip: (kind) => {
@@ -211,6 +279,10 @@ export function createSoundEngine(): SoundEngine {
     },
 
     dispose: () => {
+      if (sparkleTimeoutId !== null) {
+        clearTimeout(sparkleTimeoutId)
+        sparkleTimeoutId = null
+      }
       try {
         if (started) {
           padOscillators.forEach((osc) => osc.stop())
