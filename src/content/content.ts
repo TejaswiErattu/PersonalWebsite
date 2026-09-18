@@ -640,7 +640,12 @@ export const content: PortfolioContent = {
         intro:
           'The official website for Women in Informatics (WINFO) at the University of Washington, built from scratch to cover events, officers, membership, and support.',
         blocks: [
-          { kind: 'prose', heading: 'Media', paragraphs: ['Media coming soon.'] },
+          {
+            kind: 'video',
+            src: '/videos/winfo-demo.mp4',
+            poster: '/videos/winfo-poster.jpg',
+            caption: 'WINFO website demo — exploring events, officers, membership, and community features.',
+          },
           {
             kind: 'cards',
             heading: 'Highlights',
