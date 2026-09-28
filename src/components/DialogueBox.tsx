@@ -63,11 +63,16 @@ export default function DialogueBox({ dialogue, onClose, onCrossLink }: Dialogue
   }, [])
 
   // Videos autoplay muted when the overlay opens (via the `videoAutoplay`
-  // prop below) and must pause and rewind when it closes — including when a
-  // cross-link swaps this dialogue out for another one, since the component
-  // unmounts either way. `DetailBlockView` is shared with `ProjectPage`,
-  // which does not want this behaviour, so the cleanup lives here rather
-  // than inside that component.
+  // prop below) and must stop when it closes — including when a cross-link
+  // swaps this dialogue out for another one, since the component unmounts
+  // either way. Self-hosted `<video>`s are paused and rewound here. YouTube
+  // embeds need no cleanup: `GameCanvas` renders this component only while a
+  // dialogue is open, so closing unmounts the iframe and the video stops with
+  // it. (Don't blank the iframe's `src` in this cleanup — React StrictMode
+  // runs it once right after mount in dev, which would kill the video that
+  // just started.) `DetailBlockView` is shared with `ProjectPage`, which does
+  // not want the `<video>` behaviour, so the cleanup lives here rather than
+  // inside that component.
   useEffect(() => {
     const container = contentRef.current
     return () => {

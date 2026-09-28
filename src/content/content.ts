@@ -64,6 +64,7 @@ export interface About {
  */
 export type DetailBlock =
   | { kind: 'video'; src: string; poster: string; caption: string }
+  | { kind: 'youtube'; videoId: string; title: string; caption: string }
   | { kind: 'image'; src: string; alt: string; caption?: string; width: number; height: number }
   | { kind: 'prose'; heading: string; paragraphs: string[] }
   | { kind: 'list'; heading: string; items: string[]; tone?: 'plain' | 'negative' }
@@ -396,6 +397,140 @@ export const content: PortfolioContent = {
             kind: 'chips',
             heading: 'Tech Stack',
             items: ['Swift', 'SwiftUI', 'ARKit', 'CoreML', 'YOLOv8n', 'Vision', 'LiDAR', 'Speech Framework'],
+          },
+        ],
+      },
+    },
+    {
+      id: 'attackcanvas',
+      title: 'AttackCanvas — AI STRIDE Threat Modeler',
+      period: 'Sep 2026',
+      blurb: 'Paste a public GitHub URL and get an evidence-backed STRIDE threat model in minutes.',
+      tech: ['TypeScript', 'Node.js', 'Claude API', 'MCP (GitHub + Semgrep)', 'Semgrep', 'OSV'],
+      built: [
+        'Loads a public repository read-only through the GitHub MCP server, with secrets redacted before anything else sees them.',
+        'Runs deterministic detectors for 13 kinds of missing security control, so a gap cannot be argued away by a README.',
+        'Maps STRIDE threats to OWASP Top 10:2025 and CWE, scored by code rather than by the model, so every score can be audited.',
+        'Shows an interactive architecture diagram and a prioritized threat list (Fix now / Fix soon / Monitor).',
+      ],
+      impact:
+        'Makes threat modeling, which is slow and expert-dependent enough that most teams skip it, something a developer can run on a public repo for about $3.',
+      learned:
+        'A security tool has to treat its own input as hostile: missing controls come from deterministic code, so text in the repository saying "auth is handled by our gateway" cannot remove a finding.',
+      links: [
+        { label: 'Live Demo', href: 'https://attackcanvas.onrender.com' },
+        { label: 'Watch Demo', href: 'https://youtu.be/OvXUEcqchVY' },
+        { label: 'View Code', href: 'https://github.com/TejaswiErattu/AttackCanvas' },
+        { label: 'Read the full write-up', href: '/projects/attackcanvas' },
+      ],
+      locationId: 'developer-tools-workshop',
+      detail: {
+        eyebrow: 'AI Threat Modeling',
+        badges: ['Live demo'],
+        intro:
+          'Paste a public GitHub URL and get an evidence-backed STRIDE threat model in minutes. AttackCanvas reads a repository without running it, maps the architecture, and finds missing security controls. Built with Jasnoor Chimni for AI Defense Lab 2026, Track 3.',
+        blocks: [
+          {
+            kind: 'youtube',
+            videoId: 'OvXUEcqchVY',
+            title: 'AttackCanvas demo video',
+            caption: 'AttackCanvas analysing a public GitHub repository, from URL to prioritized threat list.',
+          },
+          {
+            kind: 'prose',
+            heading: 'Why I Built It',
+            paragraphs: [
+              'Threat modeling catches architectural flaws, but it is slow and expert-dependent, so most teams skip it. Code scanners flag risky lines, but the worst problems are often something missing: an ownership check, CSRF protection, a rate limit. A missing control has no line to flag.',
+              'AttackCanvas reads a repository without running it, maps the architecture, and finds those missing controls. Each threat is scored by code, not by the model, so every score can be audited.',
+            ],
+          },
+          {
+            kind: 'steps',
+            heading: 'How It Works',
+            steps: [
+              {
+                title: 'Load',
+                body: 'The GitHub MCP server fetches files read-only through 6 allowlisted tools, keeping the top 300 files / 2 MB ranked by security relevance.',
+              },
+              {
+                title: 'Redact',
+                body: 'Secrets are removed before anything else sees them. Repository text is data, never instructions.',
+              },
+              {
+                title: 'Detect',
+                body: 'Deterministic detectors find frameworks, routes, auth and datastores, plus 13 kinds of missing control.',
+              },
+              {
+                title: 'Scan',
+                body: 'Semgrep (13 custom rules, via MCP) and OSV (known CVEs in npm dependencies) add evidence.',
+              },
+              {
+                title: 'Model',
+                body: 'Claude maps the components, flows and trust boundaries, then writes STRIDE threats mapped to OWASP Top 10:2025 and CWE, each citing evidence.',
+              },
+              {
+                title: 'Score',
+                body: 'Code, never the model, computes severity, confidence, basis and priority.',
+              },
+              {
+                title: 'Ask',
+                body: 'Up to 3 developer questions refine the confidence scores.',
+              },
+              {
+                title: 'Show',
+                body: 'An interactive diagram and a prioritized threat list (Fix now / Fix soon / Monitor).',
+              },
+            ],
+          },
+          {
+            kind: 'cards',
+            heading: 'Highlights',
+            cards: [
+              {
+                title: 'Evidence-backed scoring',
+                body: 'Risk is impact × likelihood, and confidence is a sum of evidence points from code, Semgrep, OSV and developer answers. Every threat is Confirmed or Predicted.',
+              },
+              {
+                title: 'Missing-control detection',
+                body: 'Deterministic detectors look for 13 kinds of control that are absent, so a README claiming "auth is handled by our gateway" cannot remove the finding.',
+              },
+              {
+                title: 'Prompt-injection hardening',
+                body: 'AttackCanvas assumes the repository may be hostile: content is wrapped and escaped, the reasoning calls have no tools attached, and secrets are redacted before any model call.',
+              },
+            ],
+          },
+          {
+            kind: 'table',
+            heading: 'Analysis Levels',
+            columns: ['Level', 'Cost per run'],
+            rows: [
+              ['0 Snapshot', '$0.30–$0.60'],
+              ['1 Basic', '$1–$1.50'],
+              ['2 Standard', '$3–$4'],
+              ['3 Deep', '$3.50–$5'],
+              ['4 Exhaustive', '$4–$6'],
+            ],
+          },
+          {
+            kind: 'prose',
+            heading: 'Try the Live Demo',
+            paragraphs: [
+              'The first load of the live demo after idle can take about a minute. Levels 0 to 3 are open on the hosted demo; level 4 is switched off to cap cost.',
+            ],
+          },
+          {
+            kind: 'chips',
+            heading: 'Tech Stack',
+            items: ['TypeScript', 'Node.js', 'Claude API', 'MCP (GitHub + Semgrep)', 'Semgrep', 'OSV'],
+          },
+          {
+            kind: 'image',
+            src: '/images/attackcanvas-diagram.png',
+            alt: 'AttackCanvas overall architecture diagram showing components, data flows and trust boundaries for an analysed repository.',
+            caption: 'The Overall view: the whole system, with trust boundaries drawn as dashed groups.',
+            width: 2528,
+            height: 1584,
           },
         ],
       },
@@ -1230,6 +1365,11 @@ export const villageLocations: VillageLocation[] = [
     signHeading: 'DEVELOPER TOOLS',
     signDescription: 'Tools that make development safer and more organized.',
     windows: [
+      {
+        id: 'attackcanvas',
+        label: 'AttackCanvas',
+        description: 'AI threat modeling from any GitHub repo.',
+      },
       {
         id: 'github-extension',
         label: 'GitHub Extension',

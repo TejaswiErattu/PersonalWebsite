@@ -506,6 +506,7 @@ export const LOCATIONS: LocationDef[] = [
       'developer-tools-workshop',
       projectsForLocation('developer-tools-workshop').map((project) => {
         const visual: Record<string, { accent: string; icon: IconId; plaque: string }> = {
+          attackcanvas: { accent: '#e05a5a', icon: 'shield', plaque: 'ATTACK CANVAS' },
           'github-extension': { accent: '#e88ec0', icon: 'branch', plaque: 'GITHUB EXT' },
           'cyber-study-tracker': { accent: '#8a6bcf', icon: 'terminal', plaque: 'TRACKER' },
         }

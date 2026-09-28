@@ -72,7 +72,7 @@ export default function ProjectPage({ route }: { route: RouteMeta }) {
         {detail.blocks.map((block, blockIndex) => (
           // Block order is fixed content from content.ts, never reordered or
           // filtered at runtime, so an index key is stable here.
-          <DetailBlockView key={blockIndex} block={block} level={2} />
+          <DetailBlockView key={blockIndex} block={block} level={2} youtubeAutoplay />
         ))}
       </article>
 

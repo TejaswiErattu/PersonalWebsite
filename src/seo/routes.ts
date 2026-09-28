@@ -23,6 +23,7 @@ export type RouteId =
   | 'project-terralend'
   | 'project-kaw'
   | 'project-bump'
+  | 'project-attackcanvas'
   | 'experience'
   | 'education'
   | 'security'
@@ -137,6 +138,15 @@ export const routes: RouteMeta[] = [
       'How Bump uses CoreLocation proximity detection and calendar integration to help friends meet up spontaneously, with privacy-first controls.',
     heading: 'Bump',
     project: 'bump',
+  },
+  {
+    id: 'project-attackcanvas',
+    path: '/projects/attackcanvas',
+    title: `AttackCanvas — AI STRIDE threat modeler — ${NAME}`,
+    description:
+      'Paste a public GitHub URL and get an evidence-backed STRIDE threat model: missing-control detection, OWASP/CWE mapping, and scores computed by code.',
+    heading: 'AttackCanvas — AI STRIDE Threat Modeler',
+    project: 'attackcanvas',
   },
   {
     id: 'experience',

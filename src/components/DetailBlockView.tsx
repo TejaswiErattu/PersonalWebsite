@@ -36,6 +36,7 @@ export function DetailBlockView({
   block,
   level,
   videoAutoplay = false,
+  youtubeAutoplay = false,
 }: {
   block: DetailBlock
   /** Heading level for this block's own `heading`/title text. */
@@ -49,6 +50,14 @@ export function DetailBlockView({
    * click-to-play behaviour.
    */
   videoAutoplay?: boolean
+  /**
+   * When true, a YouTube block starts playing (muted — browsers block
+   * autoplay with sound) as soon as it renders. Implied by `videoAutoplay`;
+   * `ProjectPage` sets it on its own so the embedded demo plays whenever the
+   * project's page is opened, without also making self-hosted `video` blocks
+   * autoplay and loop there.
+   */
+  youtubeAutoplay?: boolean
 }): JSX.Element {
   switch (block.kind) {
     case 'video':
@@ -68,6 +77,28 @@ export function DetailBlockView({
           <figcaption>{block.caption}</figcaption>
         </figure>
       )
+
+    case 'youtube': {
+      const params = new URLSearchParams({ rel: '0', playsinline: '1' })
+      if (videoAutoplay || youtubeAutoplay) {
+        params.set('autoplay', '1')
+        params.set('mute', '1')
+      }
+      return (
+        <figure className="detail-media">
+          <div className="detail-youtube">
+            <iframe
+              src={`https://www.youtube-nocookie.com/embed/${block.videoId}?${params.toString()}`}
+              title={block.title}
+              allow="autoplay; encrypted-media; picture-in-picture"
+              allowFullScreen
+              referrerPolicy="strict-origin-when-cross-origin"
+            />
+          </div>
+          <figcaption>{block.caption}</figcaption>
+        </figure>
+      )
+    }
 
     case 'image':
       return (
