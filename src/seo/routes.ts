@@ -24,6 +24,7 @@ export type RouteId =
   | 'project-kaw'
   | 'project-bump'
   | 'project-attackcanvas'
+  | 'project-agent-watch'
   | 'experience'
   | 'education'
   | 'security'
@@ -147,6 +148,15 @@ export const routes: RouteMeta[] = [
       'Paste a public GitHub URL and get an evidence-backed STRIDE threat model: missing-control detection, OWASP/CWE mapping, and scores computed by code.',
     heading: 'AttackCanvas — AI STRIDE Threat Modeler',
     project: 'attackcanvas',
+  },
+  {
+    id: 'project-agent-watch',
+    path: '/projects/agent-watch',
+    title: `Agent Watch — guardrails for AI agents — ${NAME}`,
+    description:
+      'A three-line Python SDK and AWS dashboard that shows what student AI agents do and blocks risky file reads, shell commands, and runaway spend before they run.',
+    heading: 'Agent Watch — Guardrails for Student AI Agents',
+    project: 'agent-watch',
   },
   {
     id: 'experience',

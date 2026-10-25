@@ -536,6 +536,124 @@ export const content: PortfolioContent = {
       },
     },
     {
+      id: 'agent-watch',
+      title: 'Agent Watch — Guardrails for Student AI Agents',
+      period: 'Oct 2026',
+      blurb:
+        'One place for students to see, control, and cap what their AI agents do — every LLM and tool call on a dashboard with its cost, and guardrails enforced before the action runs.',
+      tech: ['Python', 'TypeScript', 'Next.js', 'AWS Lambda', 'DynamoDB', 'API Gateway', 'AWS SAM', 'Amazon Bedrock', 'Kiro'],
+      built: [
+        'A Python SDK that wraps an agent in three lines, turning every Bedrock or Anthropic call and every tool call into an event with its tokens and cost — prompt text is never sent.',
+        'Four guardrails enforced in the SDK before the action runs: a blocked-path list, a blocked-command list, a daily spend cap, and a pause switch from the dashboard.',
+        'A serverless AWS backend (API Gateway, one Lambda, a DynamoDB single table) that computes cost server-side and sends an email, plus an optional Discord or Slack message, whenever a guardrail fires.',
+        'A Next.js dashboard with an agent inventory, a 24-hour spend chart with blocks marked, a rules editor with command presets, and an event timeline.',
+      ],
+      impact:
+        'Gives students building agents on personal API keys a safety net against a runaway loop draining a month\'s budget overnight or a careless tool reading a .env file full of secrets.',
+      learned:
+        'Being honest about where a guardrail stops matters as much as the guardrail itself: the SDK guards a careless agent, not a malicious one, and I documented exactly which paths and commands it can and cannot see.',
+      links: [
+        { label: 'Watch Demo', href: 'https://www.youtube.com/watch?v=q9FrB21_6CU' },
+        { label: 'View Code', href: 'https://github.com/TejaswiErattu/agent-watch' },
+        { label: 'Read the full write-up', href: '/projects/agent-watch' },
+      ],
+      locationId: 'developer-tools-workshop',
+      detail: {
+        eyebrow: 'AI Agent Security',
+        badges: ['Built with Kiro'],
+        intro:
+          'Agent Watch gives students one place to see, control, and cap what their AI agents do. Wrap an agent in three lines of Python, and every LLM call and tool call shows up on a dashboard with its cost, while guardrails stop risky actions before they run.',
+        blocks: [
+          {
+            kind: 'youtube',
+            videoId: 'q9FrB21_6CU',
+            title: 'Agent Watch demo video',
+            caption: 'Agent Watch blocking a .env read and a curl | sh command, then stopping an agent at its daily spend cap.',
+          },
+          {
+            kind: 'prose',
+            heading: 'Why I Built It',
+            paragraphs: [
+              'Students build agents for class projects and hackathons on personal API keys, with no security team and no budget for mistakes. Nothing shows them what the agent called, which files it touched, or what it cost.',
+              'One runaway loop can drain a month\'s budget overnight, and one careless tool can read a .env file full of secrets or pipe a script from the internet into a shell. Agent Watch catches both before they happen.',
+            ],
+          },
+          {
+            kind: 'steps',
+            heading: 'How It Works',
+            steps: [
+              {
+                title: 'Wrap',
+                body: 'Three lines — agentwatch.init, aw.wrap(client), aw.tools(TOOLS) — wrap a Bedrock or Anthropic client and the agent\'s tools. The API key never leaves the process; only its hash is sent.',
+              },
+              {
+                title: 'Check',
+                body: 'Before every call, the SDK checks the pause state, blocked paths and blocked commands for tools, and the daily spend cap for LLM calls. A block raises an exception and the action never runs.',
+              },
+              {
+                title: 'Report',
+                body: 'Each LLM call and tool call becomes an event, queued and sent by a background sender with retries, so a slow API never slows the agent down.',
+              },
+              {
+                title: 'Store',
+                body: 'API Gateway and a single Lambda validate each event, compute its cost from the server\'s own pricing table, and write it to DynamoDB with idempotent, transactional writes.',
+              },
+              {
+                title: 'Alert',
+                body: 'A newly stored blocked event sends an SNS email, and a Discord or Slack message if a webhook is configured. A failing webhook never stops the email.',
+              },
+              {
+                title: 'Show',
+                body: 'The dashboard shows every agent, its spend against the cap, a 24-hour spend chart, the pause control, the rules editor, and a filterable event timeline.',
+              },
+            ],
+          },
+          {
+            kind: 'cards',
+            heading: 'Highlights',
+            cards: [
+              {
+                title: 'Guardrails before the action',
+                body: 'Path, command, spend, and pause checks run in the SDK before the call or tool. A block still happens even if reporting it to the server fails.',
+              },
+              {
+                title: 'Kill switch',
+                body: 'Pause an agent from the dashboard and it stops within about 5 seconds: every LLM and tool call raises AgentPaused until it is resumed.',
+              },
+              {
+                title: 'Keys never leave the agent',
+                body: 'Only a hash of the API key is sent, the server stores a hash of that hash, and cost is computed server-side so a client cannot under-report it.',
+              },
+            ],
+          },
+          {
+            kind: 'table',
+            heading: 'Guardrails',
+            columns: ['Guardrail', 'What it stops'],
+            rows: [
+              ['Blocked paths', 'Reading .env or ~/.ssh'],
+              ['Blocked commands', 'Running curl … | sh'],
+              ['Daily spend cap', 'Calls over budget'],
+              ['Pause', 'Every call, on demand'],
+            ],
+          },
+          {
+            kind: 'prose',
+            heading: 'Built with Kiro',
+            paragraphs: [
+              'The whole project was built in Kiro: specs with EARS acceptance criteria and 29 design properties, steering files that kept every session on the same stack, hooks for tests-on-save and a secrets guard, and MCP servers for GitHub and the AWS docs.',
+              'The designs are checked by pytest and Hypothesis with 38 correctness properties, plus vitest for the dashboard — none of which need AWS or a network connection.',
+            ],
+          },
+          {
+            kind: 'chips',
+            heading: 'Tech Stack',
+            items: ['Python', 'TypeScript', 'Next.js', 'AWS Lambda', 'DynamoDB', 'API Gateway', 'AWS SAM', 'Amazon Bedrock', 'Kiro'],
+          },
+        ],
+      },
+    },
+    {
       id: 'github-extension',
       title: 'GitHub Extension (VS Code)',
       period: 'Jan 2026 – Jun 2026',
@@ -1369,6 +1487,11 @@ export const villageLocations: VillageLocation[] = [
         id: 'attackcanvas',
         label: 'AttackCanvas',
         description: 'AI threat modeling from any GitHub repo.',
+      },
+      {
+        id: 'agent-watch',
+        label: 'Agent Watch',
+        description: 'See, control, and cap what student AI agents do.',
       },
       {
         id: 'github-extension',
