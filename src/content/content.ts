@@ -888,7 +888,7 @@ export const content: PortfolioContent = {
       links: [
         {
           label: 'Live Site',
-          href: 'https://winfo-website-version1-nukxw8nb9-tejaswi-erattus-projects.vercel.app/',
+          href: 'https://winfo-website-version1.vercel.app/',
         },
       ],
       locationId: 'community-impact-greenhouse',
