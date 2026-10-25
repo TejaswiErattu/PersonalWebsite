@@ -710,7 +710,12 @@ export const content: PortfolioContent = {
         intro:
           'A personal dashboard for tracking a self-directed cybersecurity study plan — a visual calendar and progress tracker that reschedules missed tasks automatically.',
         blocks: [
-          { kind: 'prose', heading: 'Media', paragraphs: ['Media coming soon.'] },
+          {
+            kind: 'video',
+            src: '/videos/cyber-study-tracker-demo.mp4',
+            poster: '/videos/cyber-study-tracker-poster.jpg',
+            caption: 'Cyber Study Tracker demo — calendar, progress tracking, and automatic rescheduling.',
+          },
           {
             kind: 'cards',
             heading: 'Highlights',
